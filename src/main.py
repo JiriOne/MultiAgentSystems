@@ -9,6 +9,8 @@ def daily_energy_level(day):
 
 def main():
     
+    #np.random.seed(0)
+
     agent_list = []
     buy_order_list = []
     sell_order_list = []
@@ -16,19 +18,23 @@ def main():
     n_agents = 5
 
     #add default_order to sell_order_list
-    central_agent = agent(-1, 999999, 0, sell_price=1)
+    central_agent = agent(0, 999999, 0, sell_price=1, sensitivity=0.1)
     central_agent.create_energy(10)
+    agent_list.append(central_agent)
     default_order = central_agent.create_order()
     sell_order_list.append(default_order)
 
     # Create agents
-    for i in range(n_agents):
-        agent_list.append(agent(i, np.random.randint(0, 10), own_demand=np.random.randint(200, 800), sell_price=np.random.uniform(0.8, 1.2)))
+    for i in range(1,n_agents+1):
+        agent_list.append(agent(i, 
+                                np.random.randint(0, 10), 
+                                own_demand_base=np.random.randint(200, 800), 
+                                sell_price=np.random.uniform(0.8, 1.2), 
+                                sensitivity=np.random.uniform(0.1, 0.5)))
 
     avg_price_list = []
     energy_list = []
     funds_list = []
-
 
     verbose = True
 
@@ -42,19 +48,15 @@ def main():
         buy_order_list = []
         sell_order_list = []
 
-        #reset energ levels
-        for i in range(n_agents):
-            agent_list[i].current_energy = 0
-
         energy_today = daily_energy_level(day)
 
         # create energy
-        for i in range(n_agents):
-            agent_list[i].create_energy(energy_today)
+        for curr_agent in agent_list:
+            curr_agent.update(energy_today, avg_price_list[-1] if len(avg_price_list) > 0 else 1)
 
         # create orders
-        for i in range(n_agents):
-            order = agent_list[i].create_order()
+        for curr_agent in agent_list:
+            order = curr_agent.create_order()
             if order is not None:
                 if order.type == 'buy':
                     buy_order_list.append(order)
@@ -152,15 +154,9 @@ def main():
                         sell_order.type = 'done'  
 
         #adjust agent prices
-        # for i in range(n_agents):
-        #     if agent_list[i].current_energy > agent_list[i].own_demand:
-        #         agent_list[i].sell_price -= 0.05
-        #     else:
-        #         agent_list[i].sell_price += 0.05
 
-        #resolve unfullfilled sell orders
         for sell_order in sell_order_list:
-            if sell_order.type != 'done' and sell_order.seller_id != -1:
+            if sell_order.type != 'done' and sell_order.seller_id != 0:
                 if verbose:
                     print('Unfullfilled sell order: ', 'Seller: ', sell_order.seller_id, ' Amount: ', sell_order.amount, ' Price: ', sell_order.price)
                 #sell to central agent
@@ -213,6 +209,7 @@ def main():
 
     ax1.set_xlabel('Days')
     ax1.set_ylabel('Average Price', color='g')
+    #ax1.set_ylim(0, 2)
     ax2.set_ylabel('Energy', color='b')
 
     plt.title(f' n_agents = {n_agents}, avg_re = {np.mean([agent.re_sources for agent in agent_list])}, avg_de = {np.mean([agent.own_demand for agent in agent_list])}')
