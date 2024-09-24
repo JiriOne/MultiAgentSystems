@@ -237,11 +237,9 @@ if __name__ == '__main__':
 
 '''
 TODO:
-- move selling price function to agent
+- csv writing
 - determine initial conditions
 - add separate central agent class (or just label?)
 - fix print statements
-- individualise energy production or not?
-- fix multi-buy bug
-- fix negative energy bug
+
 '''
