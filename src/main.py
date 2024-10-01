@@ -1,14 +1,85 @@
-import numpy as np
 import matplotlib.pyplot as plt
+import numpy as np
 
-from agent import agent
-from order import order
+from random import choices
+
+from agent import CentralAgent, DistributedAgent
+from enums import HouseType
+
+
+HOUSE_TYPE_DATA = {
+    HouseType.TERRACED_HOUSE: {"proportion": 28.8, "demand_range": (1590, 2610)},
+    HouseType.DETACHED_HOUSE: {"proportion": 5.3, "demand_range": (4390, 4390)},
+    HouseType.SEMI_DETACHED_HOUSE: {"proportion": 5.3, "demand_range": (2990, 3700)},
+    HouseType.MULTI_FAMILY_HOUSE: {"proportion": 60.6, "demand_range": (1510, 2210)},
+}
+
 
 def daily_energy_level(day):
     return np.sin(day / 8)*4 + 6 + np.random.uniform(-0.1, 0.1)
 
+
+def calculate_base_demand(house_type):
+    demand_range = HOUSE_TYPE_DATA[house_type]["demand_range"]
+    yearly_demand = np.random.randint(demand_range[0], demand_range[1] + 1)
+    return yearly_demand / 365
+
+
+def generate_agents(n):
+    house_types = list(HOUSE_TYPE_DATA.keys())
+    house_proportions = [HOUSE_TYPE_DATA[ht]["proportion"] for ht in house_types]
+
+    agent_list = []
+
+    for i in range(1, n + 1):
+        selected_house_type = choices(house_types, weights=house_proportions, k=1)[0]
+        own_demand_base = calculate_base_demand(selected_house_type)
+        
+        agent_list.append(
+            DistributedAgent(
+                id=i,
+                re_sources=np.random.randint(0, 10),
+                own_demand_base=own_demand_base,
+                sell_price=np.random.uniform(0.8, 1.2),
+                sensitivity=np.random.uniform(0.1, 0.5),
+                house_type=selected_house_type
+            )
+        )
+
+    for agent in agent_list:
+        print(f"Agent {agent.id} has house type {agent.house_type} and own demand base {agent.own_demand_base}")    
+
+    return agent_list
+
+
+def plot_graphs(avg_price_list, energy_list, n_agents, agent_list, funds_list):
+    #plot averge price and energy over time with two y axis scales
+    fig, ax1 = plt.subplots()
+
+    fig.set_figwidth(15)
+
+    ax2 = ax1.twinx()
+    ax1.plot(avg_price_list, 'g-')
+    ax2.plot(energy_list, 'b-')
+
+    ax1.set_xlabel('Days')
+    ax1.set_ylabel('Average Price', color='g')
+    #ax1.set_ylim(0, 2)
+    ax2.set_ylabel('Energy', color='b')
+
+    plt.title(f'n_agents = {n_agents}, avg_re = {np.mean([agent.re_sources for agent in agent_list if not isinstance(agent, CentralAgent)])}, avg_de = {np.mean([agent.own_demand for agent in agent_list if not isinstance(agent, CentralAgent)])}')
+
+    plt.savefig('output.png')
+
+    fig2 = plt.figure()
+    plt.plot(funds_list)
+    plt.title('Funds over time')
+    plt.xlabel('Days')
+    plt.ylabel('Funds')
+    plt.savefig('output_funds.png')
+
+
 def main():
-    
     #np.random.seed(0)
 
     agent_list = []
@@ -18,19 +89,14 @@ def main():
     n_agents = 5
 
     #add default_order to sell_order_list
-    central_agent = agent(0, 999999, 0, sell_price=1, sensitivity=0.1)
+    central_agent = CentralAgent(0, 999999, 1)
     central_agent.create_energy(10)
     agent_list.append(central_agent)
     default_order = central_agent.create_order()
     sell_order_list.append(default_order)
 
     # Create agents
-    for i in range(1,n_agents+1):
-        agent_list.append(agent(i, 
-                                np.random.randint(0, 10), 
-                                own_demand_base=np.random.randint(200, 800), 
-                                sell_price=np.random.uniform(0.8, 1.2), 
-                                sensitivity=np.random.uniform(0.1, 0.5)))
+    agent_list.extend(generate_agents(n_agents))
 
     avg_price_list = []
     energy_list = []
@@ -52,7 +118,10 @@ def main():
 
         # create energy
         for curr_agent in agent_list:
-            curr_agent.update(energy_today, avg_price_list[-1] if len(avg_price_list) > 0 else 1)
+            if isinstance(curr_agent, CentralAgent):
+                continue
+
+            curr_agent.update(energy_today, avg_price_list[-1] if len(avg_price_list) > 0 else 1, day)
 
         # create orders
         for curr_agent in agent_list:
@@ -78,6 +147,8 @@ def main():
             print('Energy today: ', energy_today)
             print('')
             for i in range(n_agents):
+                if isinstance(agent_list[i], CentralAgent):
+                    continue
                 print('Agent id: ', agent_list[i].id, ' Energy: ', agent_list[i].current_energy, ' Demand: ', agent_list[i].own_demand)
             print('')
             print('Buy orders: ')
@@ -87,8 +158,8 @@ def main():
             for order in sell_order_list:
                 print('Seller id: ', order.seller_id, ' Amount: ', order.amount, ' Price: ', order.price)
             print('')
-            print('total energy: ', sum([agent.current_energy for agent in agent_list]))
-            print('total demand: ', sum([agent.own_demand for agent in agent_list]))
+            print('total energy: ', sum([agent.current_energy for agent in agent_list if not isinstance(agent, CentralAgent)]))
+            print('total demand: ', sum([agent.own_demand for agent in agent_list if not isinstance(agent, CentralAgent)]))
 
         #sort orders by price
         sell_order_list = sorted(sell_order_list, key=lambda x: x.price)
@@ -112,8 +183,8 @@ def main():
                         buyer = agent_list[buy_order.seller_id]
                         seller = agent_list[sell_order.seller_id]
 
-                        buyer.set_own_enery(buyer.current_energy + buy_order.amount)
-                        seller.set_own_enery(seller.current_energy - buy_order.amount)
+                        buyer.set_own_energy(buyer.current_energy + buy_order.amount)
+                        seller.set_own_energy(seller.current_energy - buy_order.amount)
 
                         buyer.funds -= buy_order.amount * buy_order.price
                         seller.funds += buy_order.amount * buy_order.price
@@ -137,8 +208,8 @@ def main():
                         buyer = agent_list[buy_order.seller_id]
                         seller = agent_list[sell_order.seller_id]
 
-                        buyer.set_own_enery(buyer.current_energy + buy_order.amount)
-                        seller.set_own_enery(seller.current_energy - buy_order.amount)
+                        buyer.set_own_energy(buyer.current_energy + buy_order.amount)
+                        seller.set_own_energy(seller.current_energy - buy_order.amount)
 
                         buyer.funds -= buy_order.amount * buy_order.price    
                         seller.funds += buy_order.amount * buy_order.price
@@ -166,7 +237,7 @@ def main():
                 central_agent.funds -= sell_order.amount * 0.3
 
                 seller = agent_list[sell_order.seller_id]
-                seller.set_own_enery(seller.current_energy - sell_order.amount)
+                seller.set_own_energy(seller.current_energy - sell_order.amount)
                 seller.funds += sell_order.amount * 0.3
 
                 sold_price_list.append(0.3)
@@ -191,55 +262,27 @@ def main():
         #check if everyone is satisfied
         if verbose:
             for i in range(n_agents):
+                if isinstance(agent_list[i], CentralAgent):
+                    continue
                 if agent_list[i].current_energy < agent_list[i].own_demand:
                     print('Agent id: ', agent_list[i].id, ' not satisfied')
                 else:
                     print('Agent id: ', agent_list[i].id, ' satisfied')
         
         
-
-    #plot averge price and energy over time with two y axis scales
-    fig, ax1 = plt.subplots()
-    
-    fig.set_figwidth(15)
-
-    ax2 = ax1.twinx()
-    ax1.plot(avg_price_list, 'g-')
-    ax2.plot(energy_list, 'b-')
-
-    ax1.set_xlabel('Days')
-    ax1.set_ylabel('Average Price', color='g')
-    #ax1.set_ylim(0, 2)
-    ax2.set_ylabel('Energy', color='b')
-
-    plt.title(f' n_agents = {n_agents}, avg_re = {np.mean([agent.re_sources for agent in agent_list])}, avg_de = {np.mean([agent.own_demand for agent in agent_list])}')
-
-    plt.savefig('output.png')
-
-    fig2 = plt.figure()
-    plt.plot(funds_list)
-    plt.title('Funds over time')
-    plt.xlabel('Days')
-    plt.ylabel('Funds')
-    plt.savefig('output_funds.png')
-
-
-
-
-
-
-
-
+    plot_graphs(avg_price_list, energy_list, n_agents, agent_list, funds_list)
 
 
 if __name__ == '__main__':
     main()
 
-'''
-TODO:
-- csv writing
-- determine initial conditions
-- add separate central agent class (or just label?)
-- fix print statements
 
-'''
+
+# '''
+# TODO:
+# - csv writing
+# - determine initial conditions
+# - add separate central agent class (or just label?)
+# - fix print statements
+
+# '''
