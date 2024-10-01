@@ -6,7 +6,7 @@ from random import choices
 from agent import CentralAgent, DistributedAgent
 from enums import HouseType
 
-
+# Maybe add production_range?
 HOUSE_TYPE_DATA = {
     HouseType.TERRACED_HOUSE: {"proportion": 28.8, "demand_range": (1590, 2610)},
     HouseType.DETACHED_HOUSE: {"proportion": 5.3, "demand_range": (4390, 4390)},
