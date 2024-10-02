@@ -4,6 +4,7 @@ from enum import Enum
 class OrderType(Enum):
     BUY = "buy"
     SELL = "sell"
+    DONE = "done"
     
 
 class HouseType(Enum):

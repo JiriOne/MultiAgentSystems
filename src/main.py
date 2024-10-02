@@ -4,7 +4,7 @@ import numpy as np
 from random import choices
 
 from agent import CentralAgent, DistributedAgent
-from enums import HouseType
+from enums import HouseType, OrderType
 
 # Maybe add production_range?
 HOUSE_TYPE_DATA = {
@@ -16,7 +16,7 @@ HOUSE_TYPE_DATA = {
 
 
 def daily_energy_level(day):
-    return np.sin(day / 8)*4 + 6 + np.random.uniform(-0.1, 0.1)
+    return np.sin(day / 8) + 1 + np.random.uniform(-0.1, 0.1)
 
 
 def calculate_base_demand(house_type):
@@ -127,7 +127,7 @@ def main():
         for curr_agent in agent_list:
             order = curr_agent.create_order()
             if order is not None:
-                if order.type == 'buy':
+                if order.type == OrderType.BUY:
                     buy_order_list.append(order)
                 else:
                     sell_order_list.append(order)
@@ -172,10 +172,10 @@ def main():
         # match orders
         for buy_order in buy_order_list:
 
-            while buy_order.type != 'done':
+            while buy_order.type != OrderType.DONE:
                 for sell_order in sell_order_list:
                     #buy cheapest energy first
-                    if sell_order.amount >= buy_order.amount and sell_order.type != 'done':
+                    if sell_order.amount >= buy_order.amount and sell_order.type != OrderType.DONE:
                         if verbose:
                             print('Matched order: ', 'Buyer: ', buy_order.seller_id, ' Seller: ', sell_order.seller_id, ' Amount: ', buy_order.amount, ' Price: ', buy_order.price)
                             print('Buyer: ', buy_order.seller_id, ' now has: ', agent_list[buy_order.seller_id].current_energy)
@@ -198,9 +198,9 @@ def main():
 
                         sell_order.amount -= buy_order.amount
                         buy_order.amount = 0
-                        buy_order.type = 'done'
+                        buy_order.type = OrderType.DONE
                         break
-                    elif sell_order.amount < buy_order.amount and sell_order.type != 'done':
+                    elif sell_order.amount < buy_order.amount and sell_order.type != OrderType.DONE:
                         if verbose:
                             print('Matched order: ', 'Buyer: ', buy_order.seller_id, ' Seller: ', sell_order.seller_id, ' Amount: ', sell_order.amount, ' Price: ', sell_order.price)
                             print('Buyer: ', buy_order.seller_id, ' now has: ', agent_list[buy_order.seller_id].current_energy)
@@ -222,12 +222,12 @@ def main():
 
                         buy_order.amount -= sell_order.amount
                         sell_order.amount = 0
-                        sell_order.type = 'done'  
+                        sell_order.type = OrderType.DONE 
 
         #adjust agent prices
 
         for sell_order in sell_order_list:
-            if sell_order.type != 'done' and sell_order.seller_id != 0:
+            if sell_order.type != OrderType.DONE and sell_order.seller_id != 0:
                 if verbose:
                     print('Unfullfilled sell order: ', 'Seller: ', sell_order.seller_id, ' Amount: ', sell_order.amount, ' Price: ', sell_order.price)
                 #sell to central agent
@@ -244,7 +244,7 @@ def main():
                 sold_amount_list.append(sell_order.amount)
                 
                 sell_order.amount = 0
-                sell_order.type = 'done'
+                sell_order.type = OrderType.DONE
 
         #calculate average price
         avg_price = 0
@@ -255,9 +255,7 @@ def main():
         avg_price_list.append(avg_price)
 
         #funds 
-        funds_list.append(sum([agent.funds for agent in agent_list])/ n_agents)
-
-        
+        funds_list.append(sum([agent.funds for agent in agent_list])/ n_agents)    
 
         #check if everyone is satisfied
         if verbose:

@@ -23,6 +23,8 @@ class CentralAgent(BaseAgent):
     def create_energy(self, daily_energy_level):
         self.current_energy = self.re_sources * daily_energy_level * 10
 
+    def set_own_energy(self, energy):
+        self.current_energy = energy
 
     def create_order(self):
         return Order(self.id, self.re_sources, self.sell_price, OrderType.SELL)
@@ -38,7 +40,7 @@ class DistributedAgent(BaseAgent):
 
 
     def create_energy(self, daily_energy_level):
-        self.current_energy = self.re_sources * daily_energy_level * 10
+        self.current_energy = self.re_sources * daily_energy_level * 1.5
 
 
     def create_order(self):
