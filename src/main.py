@@ -3,7 +3,7 @@ import numpy as np
 
 from random import choices
 
-from agent import CentralAgent, DistributedAgent
+from agent import CentralAgent, ProsumerAgent
 from enums import HouseType, OrderType
 
 # Maybe add production_range?
@@ -36,7 +36,7 @@ def generate_agents(n):
         own_demand_base = calculate_base_demand(selected_house_type)
         
         agent_list.append(
-            DistributedAgent(
+            ProsumerAgent(
                 id=i,
                 re_sources=np.random.randint(0, 10),
                 own_demand_base=own_demand_base,

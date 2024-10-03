@@ -30,7 +30,7 @@ class CentralAgent(BaseAgent):
         return Order(self.id, self.re_sources, self.sell_price, OrderType.SELL)
 
 
-class DistributedAgent(BaseAgent):
+class ProsumerAgent(BaseAgent):
     def __init__(self, id, re_sources, own_demand_base, sell_price, sensitivity, house_type):
         super().__init__(id, re_sources, sell_price)
         self.own_demand_base = own_demand_base
