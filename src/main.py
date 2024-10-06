@@ -1,5 +1,6 @@
 import matplotlib.pyplot as plt
 import numpy as np
+import csv
 
 from random import choices
 
@@ -79,200 +80,221 @@ def plot_graphs(avg_price_list, energy_list, n_agents, agent_list, funds_list):
     plt.savefig('output_funds.png')
 
 
-def main():
+def simulation(mode = 'distributed', n_agents = 200, n_runs = 1000, t_max = 1000):
     #np.random.seed(0)
 
-    agent_list = []
-    buy_order_list = []
-    sell_order_list = []
+    # open data file for storing results and write header
+    f = open("data/results_"+ mode + ".csv", 'w', newline='')
+    writer = csv.writer(f)
+    writer.writerow(['run', 'timestep',  'average funds', 'total energy demand', 'total central energy bought', 
+                     'energy level', 'average price'])
 
-    n_agents = 5
+    for run in range(n_runs + 1):
 
-    #add default_order to sell_order_list
-    central_agent = CentralAgent(0, 999999, 1)
-    central_agent.create_energy(10)
-    agent_list.append(central_agent)
-    default_order = central_agent.create_order()
-    sell_order_list.append(default_order)
-
-    # Create agents
-    agent_list.extend(generate_agents(n_agents))
-
-    avg_price_list = []
-    energy_list = []
-    funds_list = []
-
-    verbose = True
-
-    days = 1000
-    for day in range(days):
-
-        if day % 100 == 0:
-            print('Day: ', day)
-
-        #reset lists
+        agent_list = []
         buy_order_list = []
         sell_order_list = []
 
-        energy_today = daily_energy_level(day)
-
-        # create energy
-        for curr_agent in agent_list:
-            if isinstance(curr_agent, CentralAgent):
-                continue
-
-            curr_agent.update(energy_today, avg_price_list[-1] if len(avg_price_list) > 0 else 1, day)
-
-        # create orders
-        for curr_agent in agent_list:
-            order = curr_agent.create_order()
-            if order is not None:
-                if order.type == OrderType.BUY:
-                    buy_order_list.append(order)
-                else:
-                    sell_order_list.append(order)
-                    
-        #add defaultorder to sell_order_list
-        #reset central agent
-        central_agent.current_energy = 999999
+        #add default_order to sell_order_list
+        central_agent = CentralAgent(0, 999999, 1)
+        central_agent.create_energy(10)
+        agent_list.append(central_agent)
         default_order = central_agent.create_order()
         sell_order_list.append(default_order)
 
-        #get stats for today    
-        energy_list.append(energy_today)
+        # Create agents
+        agent_list.extend(generate_agents(n_agents))
 
-        #print info
-        if verbose:
-            print('Day: ', day)
-            print('Energy today: ', energy_today)
-            print('')
-            for i in range(n_agents):
-                if isinstance(agent_list[i], CentralAgent):
+        avg_price_list = []
+        energy_list = []
+        funds_list = []
+
+        verbose = True
+
+        for day in range(t_max + 1):
+
+            if day % 100 == 0:
+                print('Day: ', day)
+
+            #reset lists
+            buy_order_list = []
+            sell_order_list = []
+
+            energy_today = daily_energy_level(day)
+
+            # create energy
+            for curr_agent in agent_list:
+                if isinstance(curr_agent, CentralAgent):
                     continue
-                print('Agent id: ', agent_list[i].id, ' Energy: ', agent_list[i].current_energy, ' Demand: ', agent_list[i].own_demand)
-            print('')
-            print('Buy orders: ')
-            for order in buy_order_list:
-                print('Seller id: ', order.seller_id, ' Amount: ', order.amount, ' Price: ', order.price)
-            print('Sell orders: ')
-            for order in sell_order_list:
-                print('Seller id: ', order.seller_id, ' Amount: ', order.amount, ' Price: ', order.price)
-            print('')
-            print('total energy: ', sum([agent.current_energy for agent in agent_list if not isinstance(agent, CentralAgent)]))
-            print('total demand: ', sum([agent.own_demand for agent in agent_list if not isinstance(agent, CentralAgent)]))
 
-        #sort orders by price
-        sell_order_list = sorted(sell_order_list, key=lambda x: x.price)
+                curr_agent.update(energy_today, avg_price_list[-1] if len(avg_price_list) > 0 else 1, day)
 
-        #total sales 
-        sold_amount_list = []
-        sold_price_list = []
-        
+            total_demand = sum([agent.own_demand for agent in agent_list])
 
-        # match orders
-        for buy_order in buy_order_list:
-
-            while buy_order.type != OrderType.DONE:
-                for sell_order in sell_order_list:
-                    #buy cheapest energy first
-                    if sell_order.amount >= buy_order.amount and sell_order.type != OrderType.DONE:
-                        if verbose:
-                            print('Matched order: ', 'Buyer: ', buy_order.seller_id, ' Seller: ', sell_order.seller_id, ' Amount: ', buy_order.amount, ' Price: ', buy_order.price)
-                            print('Buyer: ', buy_order.seller_id, ' now has: ', agent_list[buy_order.seller_id].current_energy)
-
-                        buyer = agent_list[buy_order.seller_id]
-                        seller = agent_list[sell_order.seller_id]
-
-                        buyer.set_own_energy(buyer.current_energy + buy_order.amount)
-                        seller.set_own_energy(seller.current_energy - buy_order.amount)
-
-                        buyer.funds -= buy_order.amount * buy_order.price
-                        seller.funds += buy_order.amount * buy_order.price
+            # create orders
+            for curr_agent in agent_list:
+                order = curr_agent.create_order()
+                if order is not None:
+                    if order.type == OrderType.BUY:
+                        buy_order_list.append(order)
+                    elif mode == 'distributed': # prosumer agents only make sell order in distributed setup
+                        sell_order_list.append(order)
                         
+            #add defaultorder to sell_order_list
+            #reset central agent
+            central_agent.current_energy = 999999
+            default_order = central_agent.create_order()
+            sell_order_list.append(default_order)
 
-                        sold_amount_list.append(sell_order.amount)
-                        sold_price_list.append(sell_order.price)
+            #get stats for today    
+            energy_list.append(energy_today)
 
-                        if verbose:
-                            print('Buyer: ', buy_order.seller_id, ' now has: ', buyer.current_energy)
+            #print info
+            if verbose:
+                print('Day: ', day)
+                print('Energy today: ', energy_today)
+                print('')
+                for i in range(n_agents):
+                    if isinstance(agent_list[i], CentralAgent):
+                        continue
+                    print('Agent id: ', agent_list[i].id, ' Energy: ', agent_list[i].current_energy, ' Demand: ', agent_list[i].own_demand)
+                print('')
+                print('Buy orders: ')
+                for order in buy_order_list:
+                    print('Seller id: ', order.seller_id, ' Amount: ', order.amount, ' Price: ', order.price)
+                print('Sell orders: ')
+                for order in sell_order_list:
+                    print('Seller id: ', order.seller_id, ' Amount: ', order.amount, ' Price: ', order.price)
+                print('')
+                print('total energy: ', sum([agent.current_energy for agent in agent_list if not isinstance(agent, CentralAgent)]))
+                print('total demand: ', sum([agent.own_demand for agent in agent_list if not isinstance(agent, CentralAgent)]))
 
-                        sell_order.amount -= buy_order.amount
-                        buy_order.amount = 0
-                        buy_order.type = OrderType.DONE
-                        break
-                    elif sell_order.amount < buy_order.amount and sell_order.type != OrderType.DONE:
-                        if verbose:
-                            print('Matched order: ', 'Buyer: ', buy_order.seller_id, ' Seller: ', sell_order.seller_id, ' Amount: ', sell_order.amount, ' Price: ', sell_order.price)
-                            print('Buyer: ', buy_order.seller_id, ' now has: ', agent_list[buy_order.seller_id].current_energy)
+            #sort orders by price
+            sell_order_list = sorted(sell_order_list, key=lambda x: x.price)
 
-                        buyer = agent_list[buy_order.seller_id]
-                        seller = agent_list[sell_order.seller_id]
+            #total sales 
+            sold_amount_list = []
+            sold_price_list = []
+            
 
-                        buyer.set_own_energy(buyer.current_energy + buy_order.amount)
-                        seller.set_own_energy(seller.current_energy - buy_order.amount)
+            # match orders and track energy bought from central distributor
+            central_energy_sold = 0
+            for buy_order in buy_order_list:
 
-                        buyer.funds -= buy_order.amount * buy_order.price    
-                        seller.funds += buy_order.amount * buy_order.price
+                while buy_order.type != OrderType.DONE:
+                    for sell_order in sell_order_list:
+                        #buy cheapest energy first
+                        if sell_order.amount >= buy_order.amount and sell_order.type != OrderType.DONE:
+                            if verbose:
+                                print('Matched order: ', 'Buyer: ', buy_order.seller_id, ' Seller: ', sell_order.seller_id, ' Amount: ', buy_order.amount, ' Price: ', buy_order.price)
+                                print('Buyer: ', buy_order.seller_id, ' now has: ', agent_list[buy_order.seller_id].current_energy)
 
-                        sold_amount_list.append(sell_order.amount)
-                        sold_price_list.append(sell_order.price)
+                            buyer = agent_list[buy_order.seller_id]
+                            seller = agent_list[sell_order.seller_id]
 
-                        if verbose:
-                            print('Buyer: ', buy_order.seller_id, ' now has: ', buyer.current_energy)
+                            buyer.set_own_energy(buyer.current_energy + buy_order.amount)
+                            seller.set_own_energy(seller.current_energy - buy_order.amount)
 
-                        buy_order.amount -= sell_order.amount
-                        sell_order.amount = 0
-                        sell_order.type = OrderType.DONE 
+                            buyer.funds -= buy_order.amount * buy_order.price
+                            seller.funds += buy_order.amount * buy_order.price
+                            
+                            # changed this to buy_order.amount since the sell order isn't fully drained
+                            sold_amount_list.append(buy_order.amount)
+                            sold_price_list.append(sell_order.price)
 
-        #adjust agent prices
+                            # only needed here because sell_order amount of central agent will never be lower than buy_order amount
+                            if sell_order.seller_id == 0:
+                                central_energy_sold += buy_order.amount
 
-        for sell_order in sell_order_list:
-            if sell_order.type != OrderType.DONE and sell_order.seller_id != 0:
-                if verbose:
-                    print('Unfullfilled sell order: ', 'Seller: ', sell_order.seller_id, ' Amount: ', sell_order.amount, ' Price: ', sell_order.price)
-                #sell to central agent
-                central_agent.current_energy += sell_order.amount
 
-                #update funds
-                central_agent.funds -= sell_order.amount * 0.3
+                            if verbose:
+                                print('Buyer: ', buy_order.seller_id, ' now has: ', buyer.current_energy)
 
-                seller = agent_list[sell_order.seller_id]
-                seller.set_own_energy(seller.current_energy - sell_order.amount)
-                seller.funds += sell_order.amount * 0.3
+                            sell_order.amount -= buy_order.amount
+                            buy_order.amount = 0
+                            buy_order.type = OrderType.DONE
+                            break
+                        elif sell_order.amount < buy_order.amount and sell_order.type != OrderType.DONE:
+                            if verbose:
+                                print('Matched order: ', 'Buyer: ', buy_order.seller_id, ' Seller: ', sell_order.seller_id, ' Amount: ', sell_order.amount, ' Price: ', sell_order.price)
+                                print('Buyer: ', buy_order.seller_id, ' now has: ', agent_list[buy_order.seller_id].current_energy)
 
-                sold_price_list.append(0.3)
-                sold_amount_list.append(sell_order.amount)
-                
-                sell_order.amount = 0
-                sell_order.type = OrderType.DONE
+                            buyer = agent_list[buy_order.seller_id]
+                            seller = agent_list[sell_order.seller_id]
 
-        #calculate average price
-        avg_price = 0
-        for i in range(len(sold_price_list)):
-            avg_price += sold_price_list[i]*sold_amount_list[i]
+                            buyer.set_own_energy(buyer.current_energy + buy_order.amount)
+                            seller.set_own_energy(seller.current_energy - buy_order.amount)
 
-        avg_price = avg_price / sum(sold_amount_list) if sum(sold_amount_list) > 0 else 0
-        avg_price_list.append(avg_price)
+                            buyer.funds -= buy_order.amount * buy_order.price    
+                            seller.funds += buy_order.amount * buy_order.price
 
-        #funds 
-        funds_list.append(sum([agent.funds for agent in agent_list])/ n_agents)    
+                            sold_amount_list.append(sell_order.amount)
+                            sold_price_list.append(sell_order.price)
 
-        #check if everyone is satisfied
-        if verbose:
-            for i in range(n_agents):
-                if isinstance(agent_list[i], CentralAgent):
-                    continue
-                if agent_list[i].current_energy < agent_list[i].own_demand:
-                    print('Agent id: ', agent_list[i].id, ' not satisfied')
-                else:
-                    print('Agent id: ', agent_list[i].id, ' satisfied')
+                            if verbose:
+                                print('Buyer: ', buy_order.seller_id, ' now has: ', buyer.current_energy)
+
+                            buy_order.amount -= sell_order.amount
+                            sell_order.amount = 0
+                            sell_order.type = OrderType.DONE 
+
+            #adjust agent prices
+
+            for sell_order in sell_order_list:
+                if sell_order.type != OrderType.DONE and sell_order.seller_id != 0:
+                    if verbose:
+                        print('Unfullfilled sell order: ', 'Seller: ', sell_order.seller_id, ' Amount: ', sell_order.amount, ' Price: ', sell_order.price)
+                    #sell to central agent
+                    central_agent.current_energy += sell_order.amount
+
+                    #update funds
+                    central_agent.funds -= sell_order.amount * 0.3
+
+                    seller = agent_list[sell_order.seller_id]
+                    seller.set_own_energy(seller.current_energy - sell_order.amount)
+                    seller.funds += sell_order.amount * 0.3
+
+                    sold_price_list.append(0.3)
+                    sold_amount_list.append(sell_order.amount)
+                    
+                    sell_order.amount = 0
+                    sell_order.type = OrderType.DONE
+
+            #calculate average price
+            avg_price = 0
+            for i in range(len(sold_price_list)):
+                avg_price += sold_price_list[i]*sold_amount_list[i]
+
+            avg_price = avg_price / sum(sold_amount_list) if sum(sold_amount_list) > 0 else 0
+            avg_price_list.append(avg_price)
+
+            #funds 
+            avg_funds = sum([agent.funds for agent in agent_list])/ n_agents
+            funds_list.append(avg_funds)    
+
+            #check if everyone is satisfied
+            if verbose:
+                for i in range(n_agents):
+                    if isinstance(agent_list[i], CentralAgent):
+                        continue
+                    if agent_list[i].current_energy < agent_list[i].own_demand:
+                        print('Agent id: ', agent_list[i].id, ' not satisfied')
+                    else:
+                        print('Agent id: ', agent_list[i].id, ' satisfied')
+
+
+            # write timestep info to csv
+            # TODO: this currently saves daily energy level and not energy produced, which do we want?
+            writer.writerow([run, day, avg_funds, total_demand, central_energy_sold, energy_today , avg_price])
         
-        
-    plot_graphs(avg_price_list, energy_list, n_agents, agent_list, funds_list)
+        # only when doing individual runs, once using proper experiment setup we use a separate graphing script    
+        # plot_graphs(avg_price_list, energy_list, n_agents, agent_list, funds_list)
 
 
 if __name__ == '__main__':
-    main()
+    # run both simulations using 
+    simulation('distributed')
+    simulation('centralised')
 
 
 
@@ -280,7 +302,5 @@ if __name__ == '__main__':
 # TODO:
 # - csv writing
 # - determine initial conditions
-# - add separate central agent class (or just label?)
-# - fix print statements
-
+# - maybe make separate simulation file?
 # '''
