@@ -2,10 +2,11 @@ import matplotlib.pyplot as plt
 import numpy as np
 import csv
 
-from random import choices
+from random import choices, shuffle
 
 from agent import CentralAgent, ProsumerAgent
 from enums import HouseType, OrderType
+from progressbar import progressbar, clear_progressbar
 
 # Maybe add production_range?
 HOUSE_TYPE_DATA = {
@@ -26,7 +27,7 @@ def calculate_base_demand(house_type):
     return yearly_demand / 365
 
 
-def generate_agents(n):
+def generate_agents(n, verbose):
     house_types = list(HOUSE_TYPE_DATA.keys())
     house_proportions = [HOUSE_TYPE_DATA[ht]["proportion"] for ht in house_types]
 
@@ -47,8 +48,9 @@ def generate_agents(n):
             )
         )
 
-    for agent in agent_list:
-        print(f"Agent {agent.id} has house type {agent.house_type} and own demand base {agent.own_demand_base}")    
+    if verbose:
+        for agent in agent_list:
+            print(f"Agent {agent.id} has house type {agent.house_type} and own demand base {agent.own_demand_base}")    
 
     return agent_list
 
@@ -80,16 +82,20 @@ def plot_graphs(avg_price_list, energy_list, n_agents, agent_list, funds_list):
     plt.savefig('output_funds.png')
 
 
-def simulation(mode = 'distributed', n_agents = 200, n_runs = 1000, t_max = 1000):
+def simulation(mode = 'distributed', n_agents = 200, n_runs = 10, t_max = 1000, verbose = False):
     #np.random.seed(0)
 
+    print("Now running the simulation in " + mode + " mode")
+
     # open data file for storing results and write header
-    f = open("data/results_"+ mode + ".csv", 'w', newline='')
+    f = open("../data/results_"+ mode + ".csv", 'w+', newline='')
     writer = csv.writer(f)
     writer.writerow(['run', 'timestep',  'average funds', 'total energy demand', 'total central energy bought', 
-                     'energy level', 'average price'])
+                     'total energy produced', 'average price'])
 
-    for run in range(n_runs + 1):
+    for run in range(n_runs):
+
+        progressbar(run, n_runs)
 
         agent_list = []
         buy_order_list = []
@@ -103,17 +109,13 @@ def simulation(mode = 'distributed', n_agents = 200, n_runs = 1000, t_max = 1000
         sell_order_list.append(default_order)
 
         # Create agents
-        agent_list.extend(generate_agents(n_agents))
+        agent_list.extend(generate_agents(n_agents, verbose))
 
-        avg_price_list = []
-        energy_list = []
-        funds_list = []
+        avg_price = 1
 
-        verbose = True
+        for day in range(t_max):
 
-        for day in range(t_max + 1):
-
-            if day % 100 == 0:
+            if day % 100 == 0 and verbose:
                 print('Day: ', day)
 
             #reset lists
@@ -127,9 +129,10 @@ def simulation(mode = 'distributed', n_agents = 200, n_runs = 1000, t_max = 1000
                 if isinstance(curr_agent, CentralAgent):
                     continue
 
-                curr_agent.update(energy_today, avg_price_list[-1] if len(avg_price_list) > 0 else 1, day)
+                curr_agent.update(energy_today, avg_price, day)
 
-            total_demand = sum([agent.own_demand for agent in agent_list])
+            total_demand = sum([agent.own_demand for agent in agent_list if not isinstance(agent, CentralAgent)])
+            total_produced = sum([agent.current_energy for agent in agent_list if not isinstance(agent, CentralAgent)])
 
             # create orders
             for curr_agent in agent_list:
@@ -145,9 +148,6 @@ def simulation(mode = 'distributed', n_agents = 200, n_runs = 1000, t_max = 1000
             central_agent.current_energy = 999999
             default_order = central_agent.create_order()
             sell_order_list.append(default_order)
-
-            #get stats for today    
-            energy_list.append(energy_today)
 
             #print info
             if verbose:
@@ -179,6 +179,7 @@ def simulation(mode = 'distributed', n_agents = 200, n_runs = 1000, t_max = 1000
 
             # match orders and track energy bought from central distributor
             central_energy_sold = 0
+            shuffle(buy_order_list)
             for buy_order in buy_order_list:
 
                 while buy_order.type != OrderType.DONE:
@@ -266,11 +267,9 @@ def simulation(mode = 'distributed', n_agents = 200, n_runs = 1000, t_max = 1000
                 avg_price += sold_price_list[i]*sold_amount_list[i]
 
             avg_price = avg_price / sum(sold_amount_list) if sum(sold_amount_list) > 0 else 0
-            avg_price_list.append(avg_price)
 
             #funds 
-            avg_funds = sum([agent.funds for agent in agent_list])/ n_agents
-            funds_list.append(avg_funds)    
+            avg_funds = sum([agent.funds for agent in agent_list])/ n_agents 
 
             #check if everyone is satisfied
             if verbose:
@@ -284,11 +283,9 @@ def simulation(mode = 'distributed', n_agents = 200, n_runs = 1000, t_max = 1000
 
 
             # write timestep info to csv
-            # TODO: this currently saves daily energy level and not energy produced, which do we want?
-            writer.writerow([run, day, avg_funds, total_demand, central_energy_sold, energy_today , avg_price])
-        
-        # only when doing individual runs, once using proper experiment setup we use a separate graphing script    
-        # plot_graphs(avg_price_list, energy_list, n_agents, agent_list, funds_list)
+            writer.writerow([run, day, avg_funds, total_demand, central_energy_sold, total_produced , avg_price])
+
+    clear_progressbar()
 
 
 if __name__ == '__main__':
@@ -300,7 +297,6 @@ if __name__ == '__main__':
 
 # '''
 # TODO:
-# - csv writing
 # - determine initial conditions
-# - maybe make separate simulation file?
+# - maybe make separate simulation file in case time left over
 # '''
