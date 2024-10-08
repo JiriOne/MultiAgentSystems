@@ -55,33 +55,6 @@ def generate_agents(n, verbose):
     return agent_list
 
 
-def plot_graphs(avg_price_list, energy_list, n_agents, agent_list, funds_list):
-    #plot averge price and energy over time with two y axis scales
-    fig, ax1 = plt.subplots()
-
-    fig.set_figwidth(15)
-
-    ax2 = ax1.twinx()
-    ax1.plot(avg_price_list, 'g-')
-    ax2.plot(energy_list, 'b-')
-
-    ax1.set_xlabel('Days')
-    ax1.set_ylabel('Average Price', color='g')
-    #ax1.set_ylim(0, 2)
-    ax2.set_ylabel('Energy', color='b')
-
-    plt.title(f'n_agents = {n_agents}, avg_re = {np.mean([agent.re_sources for agent in agent_list if not isinstance(agent, CentralAgent)])}, avg_de = {np.mean([agent.own_demand for agent in agent_list if not isinstance(agent, CentralAgent)])}')
-
-    plt.savefig('output.png')
-
-    fig2 = plt.figure()
-    plt.plot(funds_list)
-    plt.title('Funds over time')
-    plt.xlabel('Days')
-    plt.ylabel('Funds')
-    plt.savefig('output_funds.png')
-
-
 def simulation(mode = 'distributed', n_agents = 200, n_runs = 10, t_max = 1000, verbose = False):
     #np.random.seed(0)
 
