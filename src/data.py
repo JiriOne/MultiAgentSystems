@@ -15,8 +15,8 @@ def get_average_difference_in_seasons(year):
     summer_data_year = solar_data_year[solar_data_year['Local'].dt.month.isin(summer_months)]
     winter_data_year = solar_data_year[solar_data_year['Local'].dt.month.isin(winter_months)]
 
-    summer_data_filtered_year = summer_data_year[summer_data_year['Netherlands'] > 0]['Netherlands']
-    winter_data_filtered_year = winter_data_year[winter_data_year['Netherlands'] > 0]['Netherlands']
+    summer_data_filtered_year = summer_data_year[summer_data_year['Netherlands'] > 0]
+    winter_data_filtered_year = winter_data_year[winter_data_year['Netherlands'] > 0]
 
     print(winter_data_filtered_year)
 
