@@ -2,7 +2,7 @@ import pandas as pd
 
 
 def get_average_difference_in_seasons(year):
-    file_path = 'ProvincialProduction.csv'
+    file_path = '../data/ProvincialProduction.csv'
     solar_data_cleaned = pd.read_csv(file_path, skiprows=13)
 
     solar_data_cleaned['Local'] = pd.to_datetime(solar_data_cleaned['Local'])
@@ -15,14 +15,14 @@ def get_average_difference_in_seasons(year):
     summer_data_year = solar_data_year[solar_data_year['Local'].dt.month.isin(summer_months)]
     winter_data_year = solar_data_year[solar_data_year['Local'].dt.month.isin(winter_months)]
 
-    summer_data_filtered_year = summer_data_year[summer_data_year['Netherlands'] > 0]
-    winter_data_filtered_year = winter_data_year[winter_data_year['Netherlands'] > 0]
+    summer_data_filtered_year = summer_data_year[summer_data_year['Groningen'] > 0]
+    winter_data_filtered_year = winter_data_year[winter_data_year['Groningen'] > 0]
 
     print(winter_data_filtered_year)
 
     if not summer_data_filtered_year.empty and not winter_data_filtered_year.empty:
-        summer_avg_production_filtered_year = summer_data_filtered_year['Netherlands'].mean()
-        winter_avg_production_filtered_year = winter_data_filtered_year['Netherlands'].mean()
+        summer_avg_production_filtered_year = summer_data_filtered_year['Groningen'].mean()
+        winter_avg_production_filtered_year = winter_data_filtered_year['Groningen'].mean()
 
         # Calculate the percentage difference
         percentage_difference_filtered_year = ((summer_avg_production_filtered_year - winter_avg_production_filtered_year) / winter_avg_production_filtered_year) * 100

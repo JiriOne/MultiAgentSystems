@@ -6,12 +6,12 @@ from enums import OrderType, HouseType
 
 
 class BaseAgent(ABC):
-    def __init__(self, id, re_sources, sell_price):
+    def __init__(self, id, n_panels, sell_price):
         self.id = id
-        self.re_sources = re_sources
+        self.n_panels = n_panels
         self.sell_price = sell_price
-        self.funds = 0
-        self.current_energy = 0
+        self.balance = 0
+        self.energy_level = 0
 
 
     @abstractmethod
@@ -21,47 +21,47 @@ class BaseAgent(ABC):
 
 class CentralAgent(BaseAgent):
     def create_energy(self, daily_energy_level):
-        self.current_energy = self.re_sources * daily_energy_level * 10
+        self.energy_level = self.n_panels * daily_energy_level * 10
 
     def set_own_energy(self, energy):
-        self.current_energy = energy
+        self.energy_level = energy
 
     def create_order(self):
-        return Order(self.id, self.re_sources, self.sell_price, OrderType.SELL)
+        return Order(self.id, self.n_panels, self.sell_price, OrderType.SELL)
 
 
 class ProsumerAgent(BaseAgent):
-    def __init__(self, id, re_sources, own_demand_base, sell_price, sensitivity, house_type):
+    def __init__(self, id, re_sources, base_energy_demand, sell_price, sensitivity, house_type):
         super().__init__(id, re_sources, sell_price)
-        self.own_demand_base = own_demand_base
-        self.own_demand = own_demand_base
+        self.base_energy_demand = base_energy_demand
+        self.energy_demand = base_energy_demand
         self.sensitivity = sensitivity
         self.house_type = house_type
 
 
     def create_energy(self, daily_energy_level):
-        self.current_energy = self.re_sources * daily_energy_level * 1.5
+        self.energy_level = self.n_panels * daily_energy_level * 1.5
 
 
     def create_order(self):
-        if self.current_energy > self.own_demand:
-            tmp_amount = self.current_energy - self.own_demand
+        if self.energy_level > self.energy_demand:
+            tmp_amount = self.energy_level - self.energy_demand
             return Order(self.id, tmp_amount, self.sell_price, OrderType.SELL)
-        elif self.current_energy < self.own_demand:
-            tmp_amount = self.own_demand - self.current_energy
+        elif self.energy_level < self.energy_demand:
+            tmp_amount = self.energy_demand - self.energy_level
             return Order(self.id, tmp_amount, self.sell_price, OrderType.BUY)
         return None
     
 
     def update(self, daily_energy_level, average_price, iteration):
-        self.current_energy = 0
+        self.energy_level = 0
         self.create_energy(daily_energy_level)
-        self.own_demand = calculate_seasonal_demand(iteration, self.own_demand_base)
-        self.sell_price = self.sensitivity * abs(self.current_energy - self.own_demand) + average_price + np.random.uniform(-0.1, 0.1)
+        self.energy_demand = calculate_seasonal_demand(iteration, self.base_energy_demand)
+        self.sell_price = self.sensitivity * abs(self.energy_level - self.energy_demand) + average_price + np.random.uniform(-0.1, 0.1)
         
 
     def set_own_energy(self, energy):
-        self.current_energy = energy
+        self.energy_level = energy
 
 
 # Sinusoidal function over 365 days
