@@ -18,15 +18,12 @@ def get_average_difference_in_seasons(year):
     summer_data_filtered_year = summer_data_year[summer_data_year['Groningen'] > 0]
     winter_data_filtered_year = winter_data_year[winter_data_year['Groningen'] > 0]
 
-    print(winter_data_filtered_year)
-
     if not summer_data_filtered_year.empty and not winter_data_filtered_year.empty:
         summer_avg_production_filtered_year = summer_data_filtered_year['Groningen'].mean()
         winter_avg_production_filtered_year = winter_data_filtered_year['Groningen'].mean()
 
         # Calculate the percentage difference
         percentage_difference_filtered_year = ((summer_avg_production_filtered_year - winter_avg_production_filtered_year) / winter_avg_production_filtered_year) * 100
-        print(percentage_difference_filtered_year)
         return summer_avg_production_filtered_year, winter_avg_production_filtered_year, percentage_difference_filtered_year
     else:
         return None, None, None

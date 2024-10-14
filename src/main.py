@@ -50,13 +50,13 @@ def generate_agents(n, verbose):
 
     for i in range(1, n + 1):
         selected_house_type = choices(house_types, weights=house_proportions, k=1)[0]
-        own_demand_base_yearly = calculate_base_demand(selected_house_type)
+        base_energy_demand_yearly = calculate_base_demand(selected_house_type)
         
         agent_list.append(
             ProsumerAgent(
                 id=i,
-                re_sources=calculate_solar_panels(own_demand_base_yearly),
-                own_demand_base=own_demand_base_yearly / 365,
+                re_sources=calculate_solar_panels(base_energy_demand_yearly),
+                base_energy_demand=base_energy_demand_yearly / 365,
                 sell_price=np.random.uniform(0.8, 1.2),
                 sensitivity=np.random.uniform(0.1, 0.5),
                 house_type=selected_house_type
@@ -70,7 +70,7 @@ def generate_agents(n, verbose):
     return agent_list
 
 
-def plot_graphs(avg_price_list, energy_list, n_agents, agent_list, funds_list):
+def plot_graphs(avg_price_list, energy_list, n_agents, agent_list, balance_sheet):
     #plot averge price and energy over time with two y axis scales
     fig, ax1 = plt.subplots()
 
@@ -90,11 +90,11 @@ def plot_graphs(avg_price_list, energy_list, n_agents, agent_list, funds_list):
     plt.savefig('output.png')
 
     fig2 = plt.figure()
-    plt.plot(funds_list)
-    plt.title('Funds over time')
+    plt.plot(balance_sheet)
+    plt.title('Balance Sheet')
     plt.xlabel('Days')
-    plt.ylabel('Funds')
-    plt.savefig('output_funds.png')
+    plt.ylabel('Balance')
+    plt.savefig('output_balance.png')
 
 
 def calculate_solar_panels(annual_energy_demand, noise_level=0.1, zero_panel_prob=0.05):
@@ -124,7 +124,7 @@ def simulation(mode = 'distributed', n_agents = 200, n_runs = 10, t_max = 1000, 
     # open data file for storing results and write header
     f = open("../data/results_"+ mode + ".csv", 'w+', newline='')
     writer = csv.writer(f)
-    writer.writerow(['run', 'timestep',  'average funds', 'total energy demand', 'total central energy bought', 
+    writer.writerow(['run', 'timestep',  'average balance', 'total energy demand', 'total central energy bought', 
                      'total energy produced', 'average price'])
 
     for run in range(n_runs):
@@ -167,8 +167,8 @@ def simulation(mode = 'distributed', n_agents = 200, n_runs = 10, t_max = 1000, 
 
                 curr_agent.update(energy_today, avg_price, day)
 
-            total_demand = sum([agent.own_demand for agent in agent_list if not isinstance(agent, CentralAgent)])
-            total_produced = sum([agent.current_energy for agent in agent_list if not isinstance(agent, CentralAgent)])
+            total_demand = sum([agent.energy_demand for agent in agent_list if not isinstance(agent, CentralAgent)])
+            total_produced = sum([agent.energy_level for agent in agent_list if not isinstance(agent, CentralAgent)])
 
             # create orders
             for curr_agent in agent_list:
@@ -181,7 +181,7 @@ def simulation(mode = 'distributed', n_agents = 200, n_runs = 10, t_max = 1000, 
                         
             #add defaultorder to sell_order_list
             #reset central agent
-            central_agent.current_energy = 999999
+            central_agent.energy_level = 999999
             default_order = central_agent.create_order()
             sell_order_list.append(default_order)
 
@@ -193,7 +193,7 @@ def simulation(mode = 'distributed', n_agents = 200, n_runs = 10, t_max = 1000, 
                 for i in range(n_agents):
                     if isinstance(agent_list[i], CentralAgent):
                         continue
-                    print('Agent id: ', agent_list[i].id, ' Energy: ', agent_list[i].current_energy, ' Demand: ', agent_list[i].own_demand)
+                    print('Agent id: ', agent_list[i].id, ' Energy: ', agent_list[i].energy_level, ' Demand: ', agent_list[i].energy_demand)
                 print('')
                 print('Buy orders: ')
                 for order in buy_order_list:
@@ -202,8 +202,8 @@ def simulation(mode = 'distributed', n_agents = 200, n_runs = 10, t_max = 1000, 
                 for order in sell_order_list:
                     print('Seller id: ', order.seller_id, ' Amount: ', order.amount, ' Price: ', order.price)
                 print('')
-                print('total energy: ', sum([agent.current_energy for agent in agent_list if not isinstance(agent, CentralAgent)]))
-                print('total demand: ', sum([agent.own_demand for agent in agent_list if not isinstance(agent, CentralAgent)]))
+                print('total energy: ', sum([agent.energy_level for agent in agent_list if not isinstance(agent, CentralAgent)]))
+                print('total demand: ', sum([agent.energy_demand for agent in agent_list if not isinstance(agent, CentralAgent)]))
 
             #sort orders by price
             sell_order_list = sorted(sell_order_list, key=lambda x: x.price)
@@ -224,16 +224,16 @@ def simulation(mode = 'distributed', n_agents = 200, n_runs = 10, t_max = 1000, 
                         if sell_order.amount >= buy_order.amount and sell_order.type != OrderType.DONE:
                             if verbose:
                                 print('Matched order: ', 'Buyer: ', buy_order.seller_id, ' Seller: ', sell_order.seller_id, ' Amount: ', buy_order.amount, ' Price: ', buy_order.price)
-                                print('Buyer: ', buy_order.seller_id, ' now has: ', agent_list[buy_order.seller_id].current_energy)
+                                print('Buyer: ', buy_order.seller_id, ' now has: ', agent_list[buy_order.seller_id].energy_level)
 
                             buyer = agent_list[buy_order.seller_id]
                             seller = agent_list[sell_order.seller_id]
 
-                            buyer.set_own_energy(buyer.current_energy + buy_order.amount)
-                            seller.set_own_energy(seller.current_energy - buy_order.amount)
+                            buyer.set_own_energy(buyer.energy_level + buy_order.amount)
+                            seller.set_own_energy(seller.energy_level - buy_order.amount)
 
-                            buyer.funds -= buy_order.amount * buy_order.price
-                            seller.funds += buy_order.amount * buy_order.price
+                            buyer.balance -= buy_order.amount * buy_order.price
+                            seller.balance += buy_order.amount * buy_order.price
                             
                             # changed this to buy_order.amount since the sell order isn't fully drained
                             sold_amount_list.append(buy_order.amount)
@@ -245,7 +245,7 @@ def simulation(mode = 'distributed', n_agents = 200, n_runs = 10, t_max = 1000, 
 
 
                             if verbose:
-                                print('Buyer: ', buy_order.seller_id, ' now has: ', buyer.current_energy)
+                                print('Buyer: ', buy_order.seller_id, ' now has: ', buyer.energy_level)
 
                             sell_order.amount -= buy_order.amount
                             buy_order.amount = 0
@@ -254,22 +254,22 @@ def simulation(mode = 'distributed', n_agents = 200, n_runs = 10, t_max = 1000, 
                         elif sell_order.amount < buy_order.amount and sell_order.type != OrderType.DONE:
                             if verbose:
                                 print('Matched order: ', 'Buyer: ', buy_order.seller_id, ' Seller: ', sell_order.seller_id, ' Amount: ', sell_order.amount, ' Price: ', sell_order.price)
-                                print('Buyer: ', buy_order.seller_id, ' now has: ', agent_list[buy_order.seller_id].current_energy)
+                                print('Buyer: ', buy_order.seller_id, ' now has: ', agent_list[buy_order.seller_id].energy_level)
 
                             buyer = agent_list[buy_order.seller_id]
                             seller = agent_list[sell_order.seller_id]
 
-                            buyer.set_own_energy(buyer.current_energy + buy_order.amount)
-                            seller.set_own_energy(seller.current_energy - buy_order.amount)
+                            buyer.set_own_energy(buyer.energy_level + buy_order.amount)
+                            seller.set_own_energy(seller.energy_level - buy_order.amount)
 
-                            buyer.funds -= buy_order.amount * buy_order.price    
-                            seller.funds += buy_order.amount * buy_order.price
+                            buyer.balance -= buy_order.amount * buy_order.price    
+                            seller.balance += buy_order.amount * buy_order.price
 
                             sold_amount_list.append(sell_order.amount)
                             sold_price_list.append(sell_order.price)
 
                             if verbose:
-                                print('Buyer: ', buy_order.seller_id, ' now has: ', buyer.current_energy)
+                                print('Buyer: ', buy_order.seller_id, ' now has: ', buyer.energy_level)
 
                             buy_order.amount -= sell_order.amount
                             sell_order.amount = 0
@@ -282,14 +282,14 @@ def simulation(mode = 'distributed', n_agents = 200, n_runs = 10, t_max = 1000, 
                     if verbose:
                         print('Unfullfilled sell order: ', 'Seller: ', sell_order.seller_id, ' Amount: ', sell_order.amount, ' Price: ', sell_order.price)
                     #sell to central agent
-                    central_agent.current_energy += sell_order.amount
+                    central_agent.energy_level += sell_order.amount
 
-                    #update funds
-                    central_agent.funds -= sell_order.amount * 0.3
+                    #update balance
+                    central_agent.balance -= sell_order.amount * 0.3
 
                     seller = agent_list[sell_order.seller_id]
-                    seller.set_own_energy(seller.current_energy - sell_order.amount)
-                    seller.funds += sell_order.amount * 0.3
+                    seller.set_own_energy(seller.energy_level - sell_order.amount)
+                    seller.balance += sell_order.amount * 0.3
 
                     sold_price_list.append(0.3)
                     sold_amount_list.append(sell_order.amount)
@@ -304,22 +304,22 @@ def simulation(mode = 'distributed', n_agents = 200, n_runs = 10, t_max = 1000, 
 
             avg_price = avg_price / sum(sold_amount_list) if sum(sold_amount_list) > 0 else 0
 
-            #funds 
-            avg_funds = sum([agent.funds for agent in agent_list])/ n_agents 
+            #balance 
+            avg_balance = sum([agent.balance for agent in agent_list])/ n_agents 
 
             #check if everyone is satisfied
             if verbose:
                 for i in range(n_agents):
                     if isinstance(agent_list[i], CentralAgent):
                         continue
-                    if agent_list[i].current_energy < agent_list[i].own_demand:
+                    if agent_list[i].energy_level < agent_list[i].energy_demand:
                         print('Agent id: ', agent_list[i].id, ' not satisfied')
                     else:
                         print('Agent id: ', agent_list[i].id, ' satisfied')
 
 
             # write timestep info to csv
-            writer.writerow([run, day, avg_funds, total_demand, central_energy_sold, total_produced , avg_price])
+            writer.writerow([run, day, avg_balance, total_demand, central_energy_sold, total_produced , avg_price])
 
     clear_progressbar()
 
