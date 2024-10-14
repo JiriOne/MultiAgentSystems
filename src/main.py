@@ -4,6 +4,7 @@ import numpy as np
 from random import choices
 
 from agent import CentralAgent, ProsumerAgent
+from data import get_average_difference_in_seasons
 from enums import HouseType, OrderType
 
 # Maybe add production_range?
@@ -11,18 +12,32 @@ HOUSE_TYPE_DATA = {
     HouseType.TERRACED_HOUSE: {"proportion": 28.8, "demand_range": (1590, 2610)},
     HouseType.DETACHED_HOUSE: {"proportion": 5.3, "demand_range": (4390, 4390)},
     HouseType.SEMI_DETACHED_HOUSE: {"proportion": 5.3, "demand_range": (2990, 3700)},
-    HouseType.MULTI_FAMILY_HOUSE: {"proportion": 60.6, "demand_range": (1510, 2210)},
+    HouseType.MULTI_FAMILY_HOUSE: {"proportion": 60.6, "demand_range": (1510, 2210)}
 }
 
 
-def daily_energy_level(day):
-    return np.sin(day / 8) + 1 + np.random.uniform(-0.1, 0.1)
+def daily_energy_level(day, percentage_diff):
+    days_in_year = 365
+    phase_shift = 0
+
+    seasonality = np.sin((2 * np.pi * (day % days_in_year) / days_in_year) + phase_shift)
+
+    seasonal_effect = (percentage_diff / 100) * seasonality
+
+    # Add daily fluctuation for randomness (cloudy days, varying weather)
+    daily_variability = np.random.uniform(-0.1, 0.1)
+
+    # Base energy production level: 2 kWh per solar panel
+    base_production = 2
+
+    # Final daily energy production level with seasonal and random variations
+    return base_production * (1 + seasonal_effect + daily_variability)
 
 
 def calculate_base_demand(house_type):
     demand_range = HOUSE_TYPE_DATA[house_type]["demand_range"]
     yearly_demand = np.random.randint(demand_range[0], demand_range[1] + 1)
-    return yearly_demand / 365
+    return yearly_demand
 
 
 def generate_agents(n):
@@ -33,13 +48,13 @@ def generate_agents(n):
 
     for i in range(1, n + 1):
         selected_house_type = choices(house_types, weights=house_proportions, k=1)[0]
-        own_demand_base = calculate_base_demand(selected_house_type)
+        own_demand_base_yearly = calculate_base_demand(selected_house_type)
         
         agent_list.append(
             ProsumerAgent(
                 id=i,
-                re_sources=np.random.randint(0, 10),
-                own_demand_base=own_demand_base,
+                re_sources=calculate_solar_panels(own_demand_base_yearly),
+                own_demand_base=own_demand_base_yearly / 365,
                 sell_price=np.random.uniform(0.8, 1.2),
                 sensitivity=np.random.uniform(0.1, 0.5),
                 house_type=selected_house_type
@@ -79,6 +94,25 @@ def plot_graphs(avg_price_list, energy_list, n_agents, agent_list, funds_list):
     plt.savefig('output_funds.png')
 
 
+def calculate_solar_panels(annual_energy_demand, noise_level=0.1, zero_panel_prob=0.05):
+    # Check if the house gets 0 solar panels
+    if np.random.rand() < zero_panel_prob:
+        return 0
+
+    # Solar panel production: 2 kWh per day, 365 days per year = 730 kWh/year per panel
+    panel_production = 730
+
+    # Calculate the optimal number of solar panels
+    optimal_panels = annual_energy_demand / panel_production
+
+    # Introduce variability (better or worse setups)
+    noise_factor = np.random.uniform(1 - noise_level, 1 + noise_level)
+    actual_panels = optimal_panels * noise_factor
+
+    # Return the final number of panels
+    return round(actual_panels)
+
+
 def main():
     #np.random.seed(0)
 
@@ -102,9 +136,14 @@ def main():
     energy_list = []
     funds_list = []
 
-    verbose = True
+    # Calculate variation in energy production (2022)
+    _, _, percentage_diff = get_average_difference_in_seasons(2022)
 
-    days = 1000
+    verbose = True
+    
+
+    #TODO: Fix issue, where buyer isn't buying the chepeast order but just paying the normal selling price.
+    days = 5
     for day in range(days):
 
         if day % 100 == 0:
@@ -114,7 +153,7 @@ def main():
         buy_order_list = []
         sell_order_list = []
 
-        energy_today = daily_energy_level(day)
+        energy_today = daily_energy_level(day, percentage_diff)
 
         # create energy
         for curr_agent in agent_list:
