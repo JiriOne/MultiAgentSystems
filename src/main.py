@@ -23,7 +23,7 @@ HOUSE_TYPE_DATA = {
 def daily_energy_level(day, percentage_diff):
     days_in_year = 365
     phase_shift = 0
-
+ 
     seasonality = np.sin((2 * np.pi * (day % days_in_year) / days_in_year) + phase_shift)
     print("Seasonality: ", seasonality)
 
@@ -233,6 +233,7 @@ def simulation(mode = 'distributed', n_agents = 10, n_runs = 1, t_max = 1000, ve
 
                                 # Mark orders as done
                                 sell_order.amount -= buy_order.amount
+                                buyer.energy_bought += buy_order.amount
                                 buy_order.amount = 0
                                 buy_order.type = OrderType.DONE
 
@@ -259,6 +260,7 @@ def simulation(mode = 'distributed', n_agents = 10, n_runs = 1, t_max = 1000, ve
 
                                 # Adjust the amounts left in both orders
                                 buy_order.amount -= sell_order.amount
+                                buyer.energy_bought += sell_order.amount
                                 sell_order.amount = 0
                                 sell_order.type = OrderType.DONE
 
@@ -287,6 +289,7 @@ def simulation(mode = 'distributed', n_agents = 10, n_runs = 1, t_max = 1000, ve
                             
                             # Mark buy order as done
                             buy_order.amount -= buy_order.amount
+                            buyer.energy_bought += buy_order.amount
                             if buy_order.amount == 0:
                                 buy_order.type = OrderType.DONE
                 
