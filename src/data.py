@@ -30,4 +30,5 @@ def get_average_difference_in_seasons(year):
     
     
 if __name__ == '__main__':
-    get_average_difference_in_seasons(2022)
+    _, _, percentage_diff = get_average_difference_in_seasons(2022)
+    print(percentage_diff)
