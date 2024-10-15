@@ -1,17 +1,15 @@
-import numpy as np
 from abc import ABC, abstractmethod
+import numpy as np
 
+from enums import OrderType
 from order import Order
-from enums import OrderType, HouseType 
 
 
 class BaseAgent(ABC):
-    def __init__(self, id, re_sources, sell_price):
+    def __init__(self, id, sell_price):
         self.id = id
-        self.re_sources = re_sources
         self.sell_price = sell_price
-        self.funds = 0
-        self.current_energy = 0
+        self.balance = 0
 
 
     @abstractmethod
@@ -20,48 +18,67 @@ class BaseAgent(ABC):
 
 
 class CentralAgent(BaseAgent):
-    def create_energy(self, daily_energy_level):
-        self.current_energy = self.re_sources * daily_energy_level * 10
+    def __init__(self, id, sell_price, buy_price):
+        super().__init__(id, sell_price)
+        self.energy_bought = 0
+        self.energy_sold = 0
+        self.buy_price = buy_price
 
-    def set_own_energy(self, energy):
-        self.current_energy = energy
 
     def create_order(self):
-        return Order(self.id, self.re_sources, self.sell_price, OrderType.SELL)
+        pass
 
 
 class ProsumerAgent(BaseAgent):
-    def __init__(self, id, re_sources, own_demand_base, sell_price, sensitivity, house_type):
-        super().__init__(id, re_sources, sell_price)
-        self.own_demand_base = own_demand_base
-        self.own_demand = own_demand_base
+    def __init__(self, id, sell_price, n_panels, base_energy_demand, sensitivity, house_type):
+        super().__init__(id, sell_price)
+        self.n_panels = n_panels
+        self.base_energy_demand = base_energy_demand
+        self.energy_demand = base_energy_demand
+        self.energy_production = 0
+        self.energy_bought = 0
+        self.energy_balance = 0
         self.sensitivity = sensitivity
         self.house_type = house_type
 
 
+    def calculate_energy_balance(self):
+        self.energy_balance = self.energy_production - self.energy_demand + self.energy_bought  
+
+
     def create_energy(self, daily_energy_level):
-        self.current_energy = self.re_sources * daily_energy_level * 1.5
+        return self.n_panels * daily_energy_level
 
 
     def create_order(self):
-        if self.current_energy > self.own_demand:
-            tmp_amount = self.current_energy - self.own_demand
-            return Order(self.id, tmp_amount, self.sell_price, OrderType.SELL)
-        elif self.current_energy < self.own_demand:
-            tmp_amount = self.own_demand - self.current_energy
-            return Order(self.id, tmp_amount, self.sell_price, OrderType.BUY)
+        if self.energy_production > self.energy_demand: # Surplus
+            energy_surplus = self.energy_production - self.energy_demand
+            return Order(self.id, energy_surplus, self.sell_price, OrderType.SELL)
+        
+        elif self.energy_production < self.energy_demand: # Deficit
+            energy_deficit = self.energy_demand - self.energy_production
+            return Order(self.id, energy_deficit, 0, OrderType.BUY)
+        
         return None
     
 
     def update(self, daily_energy_level, average_price, iteration):
-        self.current_energy = 0
-        self.create_energy(daily_energy_level)
-        self.own_demand = calculate_seasonal_demand(iteration, self.own_demand_base)
-        self.sell_price = self.sensitivity * abs(self.current_energy - self.own_demand) + average_price + np.random.uniform(-0.1, 0.1)
-        
+        self.reset()
+        self.energy_production = self.create_energy(daily_energy_level)
+        self.energy_demand = calculate_seasonal_demand(iteration, self.base_energy_demand)
+        self.energy_balance = self.energy_production - self.energy_demand
+        self.sell_price = self.sensitivity * abs(self.energy_production - self.energy_demand) + average_price + np.random.uniform(-0.1, 0.1)
+    
+
+    def reset(self):
+        self.energy_production = 0
+        self.energy_demand = 0
+        self.energy_bought = 0
+        self.energy_balance = 0
+
 
     def set_own_energy(self, energy):
-        self.current_energy = energy
+        self.energy_production += energy
 
 
 # Sinusoidal function over 365 days
@@ -76,15 +93,3 @@ def calculate_seasonal_demand(iteration, own_demand_base):
     random_noise = np.random.normal(loc=0, scale=0.02)
     
     return own_demand_base * (1 + seasonal_effect + random_noise)
-
-
-
-# '''
-# TODO:
-# - implement getters and setters
-# - implement house types and incorporate them in energy demand
-#     - set a range of possible base demands per house type
-#     - initiate agents based on housetype probabilities and then assign based demand
-# - improve sell price stuff
-# - determine parameter values (i.e. noise ranges, starting values, etc.)
-# '''
