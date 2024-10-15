@@ -25,14 +25,18 @@ def daily_energy_level(day, percentage_diff):
     phase_shift = 0
 
     seasonality = np.sin((2 * np.pi * (day % days_in_year) / days_in_year) + phase_shift)
+    print("Seasonality: ", seasonality)
 
     seasonal_effect = (percentage_diff / 100) * seasonality
+    print("Seasonal Effect: ", seasonal_effect)
 
     # Add daily fluctuation for randomness (cloudy days, varying weather)
     daily_variability = np.random.uniform(-0.1, 0.1)
 
     # Base energy production level: 2 kWh per solar panel
     base_production = 2
+
+    print("Seasonal Effect: ", seasonal_effect)
 
     # Final daily energy production level with seasonal and random variations
     return base_production * (1 + seasonal_effect + daily_variability)
@@ -118,7 +122,7 @@ def calculate_solar_panels(annual_energy_demand, noise_level=0.2, zero_panel_pro
     return round(actual_panels)
 
 
-def simulation(mode = 'distributed', n_agents = 10, n_runs = 1, t_max = 1000, verbose = True):
+def simulation(mode = 'distributed', n_agents = 10, n_runs = 1, t_max = 1000, verbose = False):
     #np.random.seed(0)
 
     print("Now running the simulation in " + mode + " mode")
@@ -158,8 +162,8 @@ def simulation(mode = 'distributed', n_agents = 10, n_runs = 1, t_max = 1000, ve
 
                 energy_today = daily_energy_level(day, percentage_diff)
 
-                if verbose:
-                    print("Energy Today: ", energy_today)
+
+                print("Energy Today: ", energy_today)
 
                 # create energy
                 for curr_agent in agent_list:
