@@ -20,15 +20,19 @@ HOUSE_TYPE_DATA = {
 }
 
 
-def daily_energy_level(day, percentage_diff):
+def daily_energy_level(day, percentage_diff, verbose=False):
     days_in_year = 365
     phase_shift = 0
  
-    seasonality = np.sin((2 * np.pi * (day % days_in_year) / days_in_year) + phase_shift)
-    print("Seasonality: ", seasonality)
+    seasonality = np.sin((2 * np.pi * (day % days_in_year) / days_in_year) + phase_shift) + 0.3
+
+    if verbose:
+        print("Seasonality: ", seasonality)
 
     seasonal_effect = (percentage_diff / 100) * seasonality
-    print("Seasonal Effect: ", seasonal_effect)
+
+    if verbose:
+        print("Seasonal Effect: ", seasonal_effect)
 
     # Add daily fluctuation for randomness (cloudy days, varying weather)
     daily_variability = np.random.uniform(-0.1, 0.1)
@@ -36,7 +40,8 @@ def daily_energy_level(day, percentage_diff):
     # Base energy production level: 2 kWh per solar panel
     base_production = 2
 
-    print("Seasonal Effect: ", seasonal_effect)
+    if verbose:
+        print("Seasonal Effect: ", seasonal_effect)
 
     # Final daily energy production level with seasonal and random variations
     return base_production * (1 + seasonal_effect + daily_variability)
@@ -64,7 +69,7 @@ def generate_agents(n, verbose):
                 n_panels=calculate_solar_panels(base_energy_demand_yearly),
                 base_energy_demand=base_energy_demand_yearly / 365,
                 sell_price=np.random.uniform(CENTRAL_BUY_PRICE + 0.01, CENTRAL_SELL_PRICE - 0.01),
-                sensitivity=np.random.uniform(0.1, 0.5),
+                sensitivity=np.random.uniform(0.01, 0.05),
                 house_type=selected_house_type
             )
         )
@@ -75,54 +80,26 @@ def generate_agents(n, verbose):
 
     return agent_list
 
-
-def plot_graphs(avg_price_list, energy_list, n_agents, agent_list, balance_sheet):
-    #plot averge price and energy over time with two y axis scales
-    fig, ax1 = plt.subplots()
-
-    fig.set_figwidth(15)
-
-    ax2 = ax1.twinx()
-    ax1.plot(avg_price_list, 'g-')
-    ax2.plot(energy_list, 'b-')
-
-    ax1.set_xlabel('Days')
-    ax1.set_ylabel('Average Price', color='g')
-    #ax1.set_ylim(0, 2)
-    ax2.set_ylabel('Energy', color='b')
-
-    plt.title(f'n_agents = {n_agents}, avg_re = {np.mean([agent.re_sources for agent in agent_list if not isinstance(agent, CentralAgent)])}, avg_de = {np.mean([agent.own_demand for agent in agent_list if not isinstance(agent, CentralAgent)])}')
-
-    plt.savefig('output.png')
-
-    fig2 = plt.figure()
-    plt.plot(balance_sheet)
-    plt.title('Balance Sheet')
-    plt.xlabel('Days')
-    plt.ylabel('Balance')
-    plt.savefig('output_balance.png')
-
-
-def calculate_solar_panels(annual_energy_demand, noise_level=0.2, zero_panel_prob=0.05):
+def calculate_solar_panels(annual_energy_demand, noise_level=0.2, zero_panel_prob=0.25):
     # Check if the house gets 0 solar panels
     if np.random.rand() < zero_panel_prob:
         return 0
 
     # Solar panel production: 2 kWh per day, 365 days per year = 730 kWh/year per panel
-    panel_production = 730
+    panel_production = round(365 * 1)
 
     # Calculate the optimal number of solar panels
     optimal_panels = annual_energy_demand / panel_production
 
     # Introduce variability (better or worse setups)
-    noise_factor = np.random.uniform(1 - noise_level, 1 + noise_level)
+    noise_factor = np.random.uniform(1 - noise_level, 1 + noise_level) 
     actual_panels = optimal_panels * noise_factor
 
     # Return the final number of panels
     return round(actual_panels)
 
 
-def simulation(mode = 'distributed', n_agents = 10, n_runs = 1, t_max = 1000, verbose = False):
+def simulation(mode = 'distributed', n_agents = 200, n_runs = 10, t_max = 1000, verbose = False):
     #np.random.seed(0)
 
     print("Now running the simulation in " + mode + " mode")
@@ -160,10 +137,11 @@ def simulation(mode = 'distributed', n_agents = 10, n_runs = 1, t_max = 1000, ve
                 buy_order_list = []
                 sell_order_list = []
 
-                energy_today = daily_energy_level(day, percentage_diff)
+                energy_today = daily_energy_level(day, percentage_diff, verbose)
 
 
-                print("Energy Today: ", energy_today)
+                if verbose:
+                    print("Energy Today: ", energy_today)
 
                 # create energy
                 for curr_agent in agent_list:
@@ -214,11 +192,15 @@ def simulation(mode = 'distributed', n_agents = 10, n_runs = 1, t_max = 1000, ve
                 for buy_order in buy_order_list:
                     while buy_order.type != OrderType.DONE:
                         for sell_order in sell_order_list:
-                                
+                            if sell_order_list[0].price > central_agent.sell_price:
+                                break
                             # Fulfill the entire buy order if possible
                             if sell_order.amount >= buy_order.amount:
                                 buyer = agent_list[buy_order.agent_id]
                                 seller = agent_list[sell_order.agent_id]
+
+                                seller.total_sold_energy_list.append(buy_order.amount)
+                                seller.total_sold_energy_price_list.append(sell_order.price)
 
                                 # Transfer energy from seller to buyer
                                 buyer.set_own_energy(buy_order.amount)
@@ -247,6 +229,9 @@ def simulation(mode = 'distributed', n_agents = 10, n_runs = 1, t_max = 1000, ve
                                 buyer = agent_list[buy_order.agent_id]
                                 seller = agent_list[sell_order.agent_id]
 
+                                seller.total_sold_energy_list.append(sell_order.amount)
+                                seller.total_sold_energy_price_list.append(sell_order.price)
+
                                 # Transfer partial energy from seller to buyer
                                 buyer.set_own_energy(sell_order.amount)
                                 seller.set_own_energy(-sell_order.amount)
@@ -274,6 +259,7 @@ def simulation(mode = 'distributed', n_agents = 10, n_runs = 1, t_max = 1000, ve
 
                         # The central agent sells energy at fixed prices (0.24)
                         if buy_order.amount > 0:  # Agent needs to buy energy from central
+    
                             buyer.set_own_energy(buy_order.amount)
                             central_agent.energy_sold += buy_order.amount
 
@@ -283,6 +269,8 @@ def simulation(mode = 'distributed', n_agents = 10, n_runs = 1, t_max = 1000, ve
 
                             sold_amount_list.append(buy_order.amount)
                             sold_price_list.append(central_agent.sell_price)
+
+                            central_energy_sold += buy_order.amount
 
                             if verbose:
                                 print(f"Central agent fulfilled {buy_order.amount} kWh for Buyer {buy_order.agent_id} at {central_agent.sell_price} €/kWh")
@@ -296,7 +284,11 @@ def simulation(mode = 'distributed', n_agents = 10, n_runs = 1, t_max = 1000, ve
                 # The central agent buys energy at fixed prices (0.07)
                 for sell_order in sell_order_list:
                     if sell_order.amount > 0:
+                        
                         seller = agent_list[sell_order.agent_id]
+
+                        seller.total_sold_energy_list.append(sell_order.amount)
+                        seller.total_sold_energy_price_list.append(sell_order.price)
 
                         seller.set_own_energy(-sell_order.amount)
                         central_agent.energy_bought += sell_order.amount
@@ -325,7 +317,7 @@ def simulation(mode = 'distributed', n_agents = 10, n_runs = 1, t_max = 1000, ve
                 # Check if each agent is satisfied
                 if verbose:
                     for agent in agent_list:
-                        if agent.energy_production < agent.energy_demand:
+                        if round(agent.energy_production, 5) < round(agent.energy_demand, 5):
                             print('Agent id: ', agent.id, ' not satisfied')
                             print('Energy production: ', agent.energy_production, ' Energy demand: ', agent.energy_demand)
 
@@ -335,11 +327,12 @@ def simulation(mode = 'distributed', n_agents = 10, n_runs = 1, t_max = 1000, ve
 
                 # write timestep info to csv
                 writer.writerow([run, day, avg_balance, total_demand, central_energy_sold, total_produced , avg_price])
+                
 
         clear_progressbar()
 
 
 if __name__ == '__main__':
     # run both simulations using 
-    simulation('distributed')
-    simulation('centralised')
+    simulation('distributed', n_agents=200, n_runs=100, t_max=365*5)
+    simulation('centralised', n_agents=200, n_runs=100, t_max=365*5)

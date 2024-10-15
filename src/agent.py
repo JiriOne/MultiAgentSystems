@@ -10,6 +10,8 @@ class BaseAgent(ABC):
         self.id = id
         self.sell_price = sell_price
         self.balance = 0
+        self.total_sold_energy_list = []
+        self.total_sold_energy_price_list = []
 
 
     @abstractmethod
@@ -67,8 +69,28 @@ class ProsumerAgent(BaseAgent):
         self.energy_production = self.create_energy(daily_energy_level)
         self.energy_demand = calculate_seasonal_demand(iteration, self.base_energy_demand)
         self.energy_balance = self.energy_production - self.energy_demand
-        self.sell_price = self.sensitivity * abs(self.energy_production - self.energy_demand) + average_price + np.random.uniform(-0.1, 0.1)
-    
+        # self.sell_price = self.sensitivity * abs(self.energy_production - self.energy_demand) + average_price + np.random.uniform(-0.1, 0.1)
+
+        if len(self.total_sold_energy_list) > 0:
+            actual_sold_price = 0
+            for idx, price in enumerate(self.total_sold_energy_price_list):
+                actual_sold_price += price*self.total_sold_energy_list[idx]
+            actual_sold_price /= sum(self.total_sold_energy_list)
+
+          
+            # print(self.total_sold_energy_price_list)
+            # print(self.total_sold_energy_list)
+            # print(f" Actual sold price: {actual_sold_price}")
+            # print(f" Average price: {average_price}")
+            if actual_sold_price > average_price:
+                self.sell_price = self.sell_price + self.sensitivity
+            else:
+                self.sell_price = max(0,self.sell_price - self.sensitivity)
+
+        #reset lists
+        self.total_sold_energy_list = []
+        self.total_sold_energy_price_list = []
+
 
     def reset(self):
         self.energy_production = 0
