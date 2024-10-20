@@ -1,13 +1,12 @@
 import csv
-import matplotlib.pyplot as plt
-import numpy as np
-
 from random import choices, shuffle, uniform
+
+import numpy as np
 
 from agent import CentralAgent, ProsumerAgent
 from data import get_average_difference_in_seasons
 from enums import HouseType, OrderType
-from progressbar import progressbar, clear_progressbar
+from progressbar import clear_progressbar, progressbar
 
 
 CENTRAL_BUY_PRICE = 0.07
@@ -80,6 +79,7 @@ def generate_agents(n, verbose):
 
     return agent_list
 
+
 def calculate_solar_panels(annual_energy_demand, noise_level=0.2, zero_panel_prob=0.25):
     # Check if the house gets 0 solar panels
     if np.random.rand() < zero_panel_prob:
@@ -107,8 +107,15 @@ def simulation(mode = 'distributed', n_agents = 200, n_runs = 10, t_max = 1000, 
     # open data file for storing results and write header
     with open(f"../data/results_{mode}.csv", 'w+', newline='', encoding='utf-8') as f:
         writer = csv.writer(f)
-        writer.writerow(['run', 'timestep', 'average balance', 'total energy demand', 'total central energy bought', 
-                         'total energy produced', 'average price'])
+        writer.writerow([
+            'run', 
+            'timestep', 
+            'average balance', 
+            'total energy demand', 
+            'total central energy bought', 
+            'total energy produced', 
+            'average price'
+        ])
 
         for run in range(n_runs):
 
@@ -120,12 +127,13 @@ def simulation(mode = 'distributed', n_agents = 200, n_runs = 10, t_max = 1000, 
             buy_order_list = []
             sell_order_list = []
 
-            #add default_order to sell_order_list
+            # Create central agent
             central_agent = CentralAgent(0, CENTRAL_SELL_PRICE, CENTRAL_BUY_PRICE)
 
             # Create agents
             agent_list.extend(generate_agents(n_agents, verbose))
 
+            # Set starting random avg price between 0.08 - 0.23 for for run
             avg_price = round(uniform(CENTRAL_BUY_PRICE + 0.01, CENTRAL_SELL_PRICE - 0.01), 2)
 
             for day in range(t_max):
@@ -133,34 +141,35 @@ def simulation(mode = 'distributed', n_agents = 200, n_runs = 10, t_max = 1000, 
                 if day % 100 == 0 and verbose:
                     print('Day: ', day)
 
-                #reset lists
+                # Reset order lists
                 buy_order_list = []
                 sell_order_list = []
 
+                # Determine energy level for day
                 energy_today = daily_energy_level(day, percentage_diff, verbose)
-
 
                 if verbose:
                     print("Energy Today: ", energy_today)
 
-                # create energy
+                # Update agent energy based on energy level of the day (energy_today)
                 for curr_agent in agent_list:
                     curr_agent.update(energy_today, avg_price, day)
 
+
+                # Determine total demand and produced energy
                 total_demand = sum([agent.energy_demand for agent in agent_list])
                 total_produced = sum([agent.energy_production for agent in agent_list])
 
-                # create orders
+                # Create orders
                 for curr_agent in agent_list:
                     order = curr_agent.create_order()
                     if order is not None:
                         if order.type == OrderType.BUY:
                             buy_order_list.append(order)
                         else:
-                            if mode == 'distributed': # prosumer agents only make sell order in distributed setup
-                                sell_order_list.append(order)
+                            sell_order_list.append(order)
 
-                #print info
+                # Print info
                 if verbose:
                     print('Day: ', day)
                     print('Energy today: ', energy_today)
@@ -178,81 +187,90 @@ def simulation(mode = 'distributed', n_agents = 200, n_runs = 10, t_max = 1000, 
                     print('total energy produced: ', sum([agent.energy_production for agent in agent_list]))
                     print('total energy demand: ', sum([agent.energy_demand for agent in agent_list]))
 
-                #sort orders by price
+                # Sort orders by price (low to high)
                 sell_order_list = sorted(sell_order_list, key=lambda x: x.price)
 
-                #total sales 
+                # Create sales tracking variables
                 sold_amount_list = []
                 sold_price_list = []
                 central_energy_sold = 0
                 
+                # Shuffle buy order list so order of agents purchasing energy is random.
                 shuffle(buy_order_list)
 
                 # First, process agent-to-agent orders
                 for buy_order in buy_order_list:
+
+                    # Loop till order is fulfilled
                     while buy_order.type != OrderType.DONE:
-                        for sell_order in sell_order_list:
-                            if sell_order_list[0].price > central_agent.sell_price:
-                                break
-                            # Fulfill the entire buy order if possible
-                            if sell_order.amount >= buy_order.amount:
-                                buyer = agent_list[buy_order.agent_id]
-                                seller = agent_list[sell_order.agent_id]
 
-                                seller.total_sold_energy_list.append(buy_order.amount)
-                                seller.total_sold_energy_price_list.append(sell_order.price)
+                        # Only process agent-to-agent order if mode is 'distributed'
+                        if mode == 'distributed':
+                            for sell_order in sell_order_list:
 
-                                # Transfer energy from seller to buyer
-                                buyer.set_own_energy(buy_order.amount)
-                                seller.set_own_energy(-buy_order.amount)
+                                # If agent sell price is higher than the central agent sell price (0.24), cancel agent-to-agent orders.
+                                if sell_order_list[0].price > central_agent.sell_price:
+                                    break
 
-                                # Update balances
-                                buyer.balance -= buy_order.amount * sell_order.price
-                                seller.balance += buy_order.amount * sell_order.price
+                                # Fulfill the entire buy order if possible
+                                if sell_order.amount >= buy_order.amount:
+                                    buyer = agent_list[buy_order.agent_id]
+                                    seller = agent_list[sell_order.agent_id]
 
-                                sold_amount_list.append(buy_order.amount)
-                                sold_price_list.append(sell_order.price)
+                                    seller.total_sold_energy_list.append(buy_order.amount)
+                                    seller.total_sold_energy_price_list.append(sell_order.price)
 
-                                # Mark orders as done
-                                sell_order.amount -= buy_order.amount
-                                buyer.energy_bought += buy_order.amount
-                                buy_order.amount = 0
-                                buy_order.type = OrderType.DONE
+                                    # Transfer energy from seller to buyer
+                                    buyer.set_own_energy(buy_order.amount)
+                                    seller.set_own_energy(-buy_order.amount)
 
-                                if verbose:
-                                    print(f"Matched order: Buyer {buy_order.agent_id}, Seller {sell_order.agent_id}, Amount {buy_order.amount}, Price {buy_order.price}")
+                                    # Update balances
+                                    buyer.balance -= buy_order.amount * sell_order.price
+                                    seller.balance += buy_order.amount * sell_order.price
 
-                                break  # Fully fulfilled, move to next buy_order
+                                    sold_amount_list.append(buy_order.amount)
+                                    sold_price_list.append(sell_order.price)
 
-                            # If sell order can't fully fulfill the buy order, partially fulfill it
-                            elif sell_order.amount < buy_order.amount:
-                                buyer = agent_list[buy_order.agent_id]
-                                seller = agent_list[sell_order.agent_id]
+                                    # Mark orders as done
+                                    sell_order.amount -= buy_order.amount
+                                    buyer.energy_bought += buy_order.amount
+                                    buy_order.amount = 0
+                                    buy_order.type = OrderType.DONE
 
-                                seller.total_sold_energy_list.append(sell_order.amount)
-                                seller.total_sold_energy_price_list.append(sell_order.price)
+                                    if verbose:
+                                        print(f"Matched order: Buyer {buy_order.agent_id}, Seller {sell_order.agent_id}, Amount {buy_order.amount}, Price {buy_order.price}")
 
-                                # Transfer partial energy from seller to buyer
-                                buyer.set_own_energy(sell_order.amount)
-                                seller.set_own_energy(-sell_order.amount)
+                                    break  # Fully fulfilled, move to next buy_order
 
-                                # Update balances
-                                buyer.balance -= sell_order.amount * sell_order.price
-                                seller.balance += sell_order.amount * sell_order.price
+                                # If sell order can't fully fulfill the buy order, partially fulfill it
+                                elif sell_order.amount < buy_order.amount:
+                                    buyer = agent_list[buy_order.agent_id]
+                                    seller = agent_list[sell_order.agent_id]
 
-                                sold_amount_list.append(sell_order.amount)
-                                sold_price_list.append(sell_order.price)
+                                    seller.total_sold_energy_list.append(sell_order.amount)
+                                    seller.total_sold_energy_price_list.append(sell_order.price)
 
-                                # Adjust the amounts left in both orders
-                                buy_order.amount -= sell_order.amount
-                                buyer.energy_bought += sell_order.amount
-                                sell_order.amount = 0
-                                sell_order.type = OrderType.DONE
+                                    # Transfer partial energy from seller to buyer
+                                    buyer.set_own_energy(sell_order.amount)
+                                    seller.set_own_energy(-sell_order.amount)
 
-                                if verbose:
-                                    print(f"Partial match: Buyer {buy_order.agent_id}, Seller {sell_order.agent_id}, Amount {sell_order.amount}, Price {sell_order.price}")
+                                    # Update balances
+                                    buyer.balance -= sell_order.amount * sell_order.price
+                                    seller.balance += sell_order.amount * sell_order.price
 
-                                # Continue looping through other sell orders to fulfill the rest of the buy order
+                                    sold_amount_list.append(sell_order.amount)
+                                    sold_price_list.append(sell_order.price)
+
+                                    # Adjust the amounts left in both orders
+                                    buy_order.amount -= sell_order.amount
+                                    buyer.energy_bought += sell_order.amount
+                                    sell_order.amount = 0
+                                    sell_order.type = OrderType.DONE
+
+                                    if verbose:
+                                        print(f"Partial match: Buyer {buy_order.agent_id}, Seller {sell_order.agent_id}, Amount {sell_order.amount}, Price {sell_order.price}")
+
+                                    # Continue looping through other sell orders to fulfill the rest of the buy order
 
 
                         buyer = agent_list[buy_order.agent_id]
