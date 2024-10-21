@@ -68,7 +68,7 @@ def generate_agents(n, verbose):
                 n_panels=calculate_solar_panels(base_energy_demand_yearly),
                 base_energy_demand=base_energy_demand_yearly / 365,
                 sell_price=np.random.uniform(CENTRAL_BUY_PRICE + 0.01, CENTRAL_SELL_PRICE - 0.01),
-                sensitivity=np.random.uniform(0.01, 0.05),
+                sensitivity=np.random.uniform(0.005, 0.02),
                 house_type=selected_house_type
             )
         )
@@ -209,11 +209,11 @@ def simulation(mode = 'distributed', n_agents = 200, n_runs = 10, t_max = 1000, 
                             for sell_order in sell_order_list:
 
                                 # If agent sell price is higher than the central agent sell price (0.24), cancel agent-to-agent orders.
-                                if sell_order_list[0].price > central_agent.sell_price:
-                                    break
+                                # if sell_order_list[0].price > central_agent.sell_price:
+                                #     break
 
                                 # Fulfill the entire buy order if possible
-                                if sell_order.amount >= buy_order.amount:
+                                if sell_order.amount >= buy_order.amount and sell_order.price <= central_agent.sell_price:
                                     buyer = agent_list[buy_order.agent_id]
                                     seller = agent_list[sell_order.agent_id]
 
@@ -237,13 +237,16 @@ def simulation(mode = 'distributed', n_agents = 200, n_runs = 10, t_max = 1000, 
                                     buy_order.amount = 0
                                     buy_order.type = OrderType.DONE
 
+                                    if sell_order.price > central_agent.sell_price:
+                                        print(f"Agent {sell_order.agent_id} sold energy at higher price than central agent: {sell_order.price} €/kWh")
+
                                     if verbose:
                                         print(f"Matched order: Buyer {buy_order.agent_id}, Seller {sell_order.agent_id}, Amount {buy_order.amount}, Price {buy_order.price}")
 
                                     break  # Fully fulfilled, move to next buy_order
 
                                 # If sell order can't fully fulfill the buy order, partially fulfill it
-                                elif sell_order.amount < buy_order.amount:
+                                elif sell_order.amount < buy_order.amount and sell_order.price <= central_agent.sell_price:
                                     buyer = agent_list[buy_order.agent_id]
                                     seller = agent_list[sell_order.agent_id]
 
