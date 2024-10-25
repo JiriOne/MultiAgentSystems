@@ -52,7 +52,7 @@ def calculate_base_demand(house_type):
     return yearly_demand
 
 
-def generate_agents(n, verbose):
+def generate_agents(n, verbose, sens_range=[0.005, 0.02], panel_production=1):
     house_types = list(HOUSE_TYPE_DATA.keys())
     house_proportions = [HOUSE_TYPE_DATA[ht]["proportion"] for ht in house_types]
 
@@ -65,10 +65,10 @@ def generate_agents(n, verbose):
         agent_list.append(
             ProsumerAgent(
                 id=i,
-                n_panels=calculate_solar_panels(base_energy_demand_yearly),
+                n_panels=calculate_solar_panels(base_energy_demand_yearly, panel_production),
                 base_energy_demand=base_energy_demand_yearly / 365,
                 sell_price=np.random.uniform(CENTRAL_BUY_PRICE + 0.01, CENTRAL_SELL_PRICE - 0.01),
-                sensitivity=np.random.uniform(0.005, 0.02),
+                sensitivity=np.random.uniform(sens_range[0], sens_range[1]),
                 house_type=selected_house_type
             )
         )
@@ -80,13 +80,13 @@ def generate_agents(n, verbose):
     return agent_list
 
 
-def calculate_solar_panels(annual_energy_demand, noise_level=0.2, zero_panel_prob=0.25):
+def calculate_solar_panels(annual_energy_demand, noise_level=0.2, zero_panel_prob=0.25, panel_production=1):
     # Check if the house gets 0 solar panels
     if np.random.rand() < zero_panel_prob:
         return 0
 
     # Solar panel production: 2 kWh per day, 365 days per year = 730 kWh/year per panel
-    panel_production = round(365 * 1)
+    panel_production = round(365 * panel_production)
 
     # Calculate the optimal number of solar panels
     optimal_panels = annual_energy_demand / panel_production
@@ -99,13 +99,13 @@ def calculate_solar_panels(annual_energy_demand, noise_level=0.2, zero_panel_pro
     return round(actual_panels)
 
 
-def simulation(mode = 'distributed', n_agents = 200, n_runs = 10, t_max = 1000, verbose = False):
+def simulation(mode = 'distributed', n_agents = 200, n_runs = 10, t_max = 1000, verbose = False, sens_range = [0.005,0.02], panel_prod = 1):
     #np.random.seed(0)
 
     print("Now running the simulation in " + mode + " mode")
 
     # open data file for storing results and write header
-    with open(f"../data/results_{mode}.csv", 'w+', newline='', encoding='utf-8') as f:
+    with open(f"../data/results_{mode}_sens{sens_range}_panel{panel_prod}.csv", 'w+', newline='', encoding='utf-8') as f:
         writer = csv.writer(f)
         writer.writerow([
             'run', 
@@ -131,7 +131,7 @@ def simulation(mode = 'distributed', n_agents = 200, n_runs = 10, t_max = 1000, 
             central_agent = CentralAgent(0, CENTRAL_SELL_PRICE, CENTRAL_BUY_PRICE)
 
             # Create agents
-            agent_list.extend(generate_agents(n_agents, verbose))
+            agent_list.extend(generate_agents(n_agents, verbose, sens_range, panel_prod))
 
             # Set starting random avg price between 0.08 - 0.23 for for run
             avg_price = round(uniform(CENTRAL_BUY_PRICE + 0.01, CENTRAL_SELL_PRICE - 0.01), 2)
@@ -187,7 +187,7 @@ def simulation(mode = 'distributed', n_agents = 200, n_runs = 10, t_max = 1000, 
                     print('total energy produced: ', sum([agent.energy_production for agent in agent_list]))
                     print('total energy demand: ', sum([agent.energy_demand for agent in agent_list]))
 
-                # Sort orders by price (low to high)
+                # Sort orders by price (low to high))
                 sell_order_list = sorted(sell_order_list, key=lambda x: x.price)
 
                 # Create sales tracking variables
@@ -355,5 +355,12 @@ def simulation(mode = 'distributed', n_agents = 200, n_runs = 10, t_max = 1000, 
 
 if __name__ == '__main__':
     # run both simulations using 
-    simulation('distributed', n_agents=200, n_runs=100, t_max=365*5)
-    simulation('centralised', n_agents=200, n_runs=100, t_max=365*5)
+    # simulation('distributed', n_agents=200, n_runs=100, t_max=365*5)
+    # simulation('centralised', n_agents=200, n_runs=100, t_max=365*5)
+
+    #grid search for sensitivity and panel production
+    for sens in [[0.005, 0.02], [0.01, 0.02], [0.05, 0.1]]:
+        for panel_prod in [0.1, 0.25, 0.5, 1, 2]:
+            simulation('distributed', n_agents=200, n_runs=100, t_max=365*5, sens_range=sens, panel_prod=panel_prod)
+            quit()
+            simulation('centralised', n_agents=200, n_runs=100, t_max=365*5, sens_range=sens, panel_prod=panel_prod)
