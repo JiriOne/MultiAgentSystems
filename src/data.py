@@ -1,3 +1,7 @@
+"""	
+File that handles the data of solar panel production.
+"""
+
 import pandas as pd
 
 

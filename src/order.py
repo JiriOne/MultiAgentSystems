@@ -1,3 +1,6 @@
+""" 
+Order class 
+"""
 class Order():
     def __init__(self, agent_id, amount, price, order_type):
         self.agent_id = agent_id

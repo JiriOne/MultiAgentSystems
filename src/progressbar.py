@@ -1,5 +1,8 @@
-import sys
+""" 
+Progress bar file
+"""
 
+import sys
 
 def progressbar(t, n):
     """

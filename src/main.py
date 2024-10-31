@@ -1,3 +1,8 @@
+""" 
+Main file for running the simulation
+The simulation can be run in two modes: 'centralised' and 'distributed'
+"""
+
 import csv
 from random import choices, shuffle, uniform
 
@@ -8,9 +13,11 @@ from data import get_average_difference_in_seasons
 from enums import HouseType, OrderType
 from progressbar import clear_progressbar, progressbar
 
-
+#initalize buy and sell price of central agent
 CENTRAL_BUY_PRICE = 0.07
 CENTRAL_SELL_PRICE = 0.24
+
+# Define the house type data & demand range
 HOUSE_TYPE_DATA = {
     HouseType.TERRACED_HOUSE: {"proportion": 28.8, "demand_range": (1590, 2610)},
     HouseType.DETACHED_HOUSE: {"proportion": 5.3, "demand_range": (4390, 4390)},
@@ -18,19 +25,23 @@ HOUSE_TYPE_DATA = {
     HouseType.MULTI_FAMILY_HOUSE: {"proportion": 60.6, "demand_range": (1510, 2210)}
 }
 
-
+# Calculate the daily energy level
 def daily_energy_level(day, percentage_diff, verbose=False):
+    """
+    Caclulate the daily energy level based on the seasonality and random fluctuations
+    :param day: current day
+    :param percentage_diff: percentage difference between summer and winter energy production
+    :param verbose: print additional information
+    """
     days_in_year = 365
     phase_shift = 0
  
-    seasonality = np.sin((2 * np.pi * (day % days_in_year) / days_in_year) + phase_shift) + 0.3
-
-    if verbose:
-        print("Seasonality: ", seasonality)
+    seasonality = np.sin((2 * np.pi * (day % days_in_year) / days_in_year) + phase_shift) + 0.3        
 
     seasonal_effect = (percentage_diff / 100) * seasonality
 
     if verbose:
+        print("Seasonality: ", seasonality)
         print("Seasonal Effect: ", seasonal_effect)
 
     # Add daily fluctuation for randomness (cloudy days, varying weather)
@@ -45,19 +56,31 @@ def daily_energy_level(day, percentage_diff, verbose=False):
     # Final daily energy production level with seasonal and random variations
     return base_production * (1 + seasonal_effect + daily_variability)
 
-
+# Calculate the base demand for each house type
 def calculate_base_demand(house_type):
+    """
+    Caclulate the base demand for each house type
+    :param house_type: the type of the house
+    """
     demand_range = HOUSE_TYPE_DATA[house_type]["demand_range"]
     yearly_demand = np.random.randint(demand_range[0], demand_range[1] + 1)
     return yearly_demand
 
-
+# Generate agents with random house types and energy demands
 def generate_agents(n, verbose, sens_range=[0.005, 0.02], panel_production=1):
+    """
+    Generate agents with random house types and energy demands, and solar panels
+    :param n: number of agents
+    :param verbose: print additional information
+    :param sens_range: sensitivity range for the agents
+    :param panel_production: production of the solar panels
+    """
     house_types = list(HOUSE_TYPE_DATA.keys())
     house_proportions = [HOUSE_TYPE_DATA[ht]["proportion"] for ht in house_types]
 
     agent_list = []
 
+    # Generate agents
     for i in range(n):
         selected_house_type = choices(house_types, weights=house_proportions, k=1)[0]
         base_energy_demand_yearly = calculate_base_demand(selected_house_type)
@@ -73,14 +96,22 @@ def generate_agents(n, verbose, sens_range=[0.005, 0.02], panel_production=1):
             )
         )
 
+    # Print agent info
     if verbose:
         for agent in agent_list:
             print(f"Agent {agent.id} has house type {agent.house_type} and own demand base {agent.base_energy_demand}")    
 
     return agent_list
 
-
+# Calculate the number of solar panels for each house
 def calculate_solar_panels(annual_energy_demand, noise_level=0.2, zero_panel_prob=0.25, panel_production=1):
+    """
+    Caclulate the number of solar panels for each house
+    :param annual_energy_demand: the annual energy demand of the house
+    :param noise_level: the noise level for the solar panels
+    :param zero_panel_prob: the probability of having 0 solar panels
+    :param panel_production: the production of the solar panels
+    """
     # Check if the house gets 0 solar panels
     if np.random.rand() < zero_panel_prob:
         return 0
@@ -98,8 +129,19 @@ def calculate_solar_panels(annual_energy_demand, noise_level=0.2, zero_panel_pro
     # Return the final number of panels
     return round(actual_panels)
 
-
+# Run the simulation
 def simulation(mode = 'distributed', n_agents = 200, n_runs = 10, t_max = 1000, verbose = False, sens_range = [0.005,0.02], panel_prod = 1):
+    """
+    Run the simulation
+    :param mode: the mode of the simulation ('centralised' or 'distributed')
+    :param n_agents: the number of agents
+    :param n_runs: the number of runs
+    :param t_max: the maximum number of timesteps
+    :param verbose: print additional information
+    :param sens_range: sensitivity range for the agents
+    :param panel_prod: production of the solar panels
+    """
+    # Set random seed for reproducibility
     #np.random.seed(0)
 
     print("Now running the simulation in " + mode + " mode")
@@ -354,13 +396,9 @@ def simulation(mode = 'distributed', n_agents = 200, n_runs = 10, t_max = 1000, 
 
 
 if __name__ == '__main__':
-    # run both simulations using 
-    # simulation('distributed', n_agents=200, n_runs=100, t_max=365*5)
-    # simulation('centralised', n_agents=200, n_runs=100, t_max=365*5)
-
     #grid search for sensitivity and panel production
     for sens in [[0.005, 0.02], [0.01, 0.02], [0.05, 0.1]]:
-        for panel_prod in [0.1, 0.25, 0.5, 1, 2]:
+        for panel_prod in [0.1, 0.25, 0.5, 1]:
             simulation('distributed', n_agents=200, n_runs=100, t_max=365*5, sens_range=sens, panel_prod=panel_prod)
             quit()
             simulation('centralised', n_agents=200, n_runs=100, t_max=365*5, sens_range=sens, panel_prod=panel_prod)
